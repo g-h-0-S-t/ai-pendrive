@@ -125,7 +125,7 @@ http://127.0.0.1:8080/
 
 Keep the launcher window open while using the model. Press `Ctrl+C` in that window to stop it.
 
-To monitor the running server, open a second window and double-click:
+To monitor the running server, double-click:
 
 ```text
 status.bat
