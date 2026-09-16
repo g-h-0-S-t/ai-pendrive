@@ -1,4 +1,4 @@
 8GB model : https://huggingface.co/HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
 
-If using hf cli, run the following inside the AI directory : 
+If using hf cli, run the following inside the ai-pendrive directory (this project's root directory) : 
 hf download hf://HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf --local-dir "models\8GB"
