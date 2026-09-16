@@ -3,15 +3,15 @@ setlocal EnableExtensions EnableDelayedExpansion
 title Local LLM Server - 64K Context
 
 rem ============================================================================
-rem START.BAT - Portable local LLM server launcher
+rem START_6GB_GPU.BAT - Portable local LLM server launcher
 rem ============================================================================
 rem Required layout:
-rem   start.bat
+rem   start_6gb_gpu.bat
 rem   server\llamafile-0.10.5.exe
-rem   models\4GB\Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf
+rem   models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf
+rem   models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
 rem   models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
 rem
-rem The 6 GB profile intentionally uses the model in models\4GB for now.
 rem ============================================================================
 
 rem ============================== CONFIGURATION ===============================
@@ -20,15 +20,14 @@ rem Hardware profile to distribute: 4, 6, or 8.
 rem 4 = designated 4 GB model and conservative GPU layers.
 rem 6 = designated 4 GB model and a larger GPU-layer target.
 rem 8 = designated 8 GB Qwen model and maximum GPU-layer target.
-set "TIER=8"
+set "TIER=6"
 
 rem Llamafile executable location, relative to this batch file.
 set "LLAMA_RELATIVE_PATH=server\llamafile-0.10.5.exe"
 
 rem Model locations, relative to this batch file.
-rem MODEL_6GB deliberately points to the designated 4 GB model.
-set "MODEL_4GB=models\4GB\Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf"
-set "MODEL_6GB=models\4GB\Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf"
+set "MODEL_4GB=models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf"
+set "MODEL_6GB=models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf"
 set "MODEL_8GB=models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf"
 
 rem Server bind address. 127.0.0.1 allows access only from this computer.
