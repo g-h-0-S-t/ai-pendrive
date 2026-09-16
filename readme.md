@@ -1,8 +1,8 @@
 # AI Pendrive
 
-A portable Windows local-LLM package built around [llamafile](https://github.com/mozilla-ai/llamafile). Double-click `start.bat` to launch a local server and browser UI; run `status.bat` in another window for a live terminal dashboard.
+A portable Windows local-LLM package built around [llamafile](https://github.com/mozilla-ai/llamafile). Double-click the launcher for your hardware tier (`start_4gb_gpu.bat`, `start_6gb_gpu.bat`, or `start_8gb_gpu.bat`) to start a local server and browser UI; run `status.bat` in another window for a live terminal dashboard.
 
-The current implementation is deliberately simple: two batch files, paths relative to the project/USB root, and one manually selected hardware profile. It does **not** auto-detect hardware, scan model folders, show a model picker, download anything automatically, or prompt for context size at runtime.
+The current implementation is deliberately simple: three tier-specific launchers, paths relative to the project/USB root, and one manually selected hardware profile. It does **not** auto-detect hardware, scan model folders, show a model picker, download anything automatically, or prompt for context size at runtime.
 
 **AI Pendrive by Cyberbatman**
 
@@ -10,17 +10,22 @@ The current implementation is deliberately simple: two batch files, paths relati
 
 ### Required layout
 
-Keep this layout. `start.bat` builds every path from its own location, so the package works from `D:`, `E:`, a USB pendrive, or an external SSD without hardcoded drive letters.
+Keep this layout. Each launcher builds every path from its own location, so the package works from `D:`, `E:`, a USB pendrive, or an external SSD without hardcoded drive letters.
 
 ```text
 ai-pendrive/
-├── start.bat
+├── start_4gb_gpu.bat
+├── start_6gb_gpu.bat
+├── start_8gb_gpu.bat
 ├── status.bat
 ├── server/
 │   └── llamafile-0.10.5.exe
 └── models/
     ├── 4GB/
-    │   ├── Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf
+    │   ├── Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf
+    │   └── instructions.txt
+    ├── 6GB/
+    │   ├── Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
     │   └── instructions.txt
     └── 8GB/
         ├── Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
@@ -37,7 +42,7 @@ Download the Windows executable for llamafile 0.10.5 and save it as:
 server\llamafile-0.10.5.exe
 ```
 
-The default script expects that exact location. If you use a different build or filename, edit this variable near the top of `start.bat`:
+Each launcher expects that exact location. If you use a different build or filename, edit this variable near the top of the selected launcher:
 
 ```bat
 set "LLAMA_RELATIVE_PATH=server\llamafile-0.10.5.exe"
@@ -45,10 +50,11 @@ set "LLAMA_RELATIVE_PATH=server\llamafile-0.10.5.exe"
 
 ### Download models
 
-Place the designated GGUF files at the exact paths shown below:
+Place the designated Qwen3.5 GGUF files at the exact paths shown below:
 
 ```text
-models\4GB\Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf
+models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf
+models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
 models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
 ```
 
@@ -56,22 +62,25 @@ See the tier-specific files for the current manual download workflow:
 
 ```text
 models\4GB\instructions.txt
+models\6GB\instructions.txt
 models\8GB\instructions.txt
 ```
 
-The current launcher does not download models automatically. The recommended current Hugging Face CLI form is:
+The launchers do not download models automatically. Run the appropriate Hugging Face CLI command from the AI directory:
 
 ```bat
-hf download REPOSITORY_ID FILENAME --local-dir "models\8GB"
+hf download hf://HauhauCS/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf --local-dir "models\4GB"
 ```
-
-or:
 
 ```bat
-hf download REPOSITORY_ID FILENAME --local-dir "models\4GB"
+hf download hf://HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf --local-dir "models\6GB"
 ```
 
-If the model repository is gated, install/authenticate the Hugging Face CLI first:
+```bat
+hf download hf://HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf --local-dir "models\8GB"
+```
+
+If the model repository is gated, install and authenticate the Hugging Face CLI first:
 
 ```bat
 pip install -U "huggingface_hub[cli]"
@@ -80,28 +89,32 @@ hf auth login
 
 ### Choose profile
 
-Open `start.bat` and edit one line before running or distributing the package:
+Each launcher defaults to the tier in its filename:
 
-```bat
-set "TIER=8"
-```
+| Launcher | `TIER` | Model path | GPU-layer target | Intended hardware |
+|---|---:|---|---:|---|
+| `start_4gb_gpu.bat` | `4` | `models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf` | `18` | Approximately 4 GB VRAM |
+| `start_6gb_gpu.bat` | `6` | `models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | `32` | Approximately 6 GB VRAM |
+| `start_8gb_gpu.bat` | `8` | `models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | `999` | Approximately 8 GB or more VRAM |
 
-| `TIER` | Current model path | GPU-layer target | Intended hardware |
-|---:|---|---:|---|
-| `4` | `models\4GB\Gemma-4-E4B...Q2_K_P.gguf` | `18` | Approximately 4 GB VRAM |
-| `6` | `models\4GB\Gemma-4-E4B...Q2_K_P.gguf` | `32` | Approximately 6 GB VRAM; intentionally reuses the 4 GB model |
-| `8` | `models\8GB\Qwen3.5-9B...Q4_K_M.gguf` | `999` | Approximately 8 GB or more VRAM |
+There is no hardware detection or menu. `TIER` is a fixed distribution/profile choice. The launchers contain all three model paths, but use the path selected by `TIER`; edit `TIER` only when intentionally changing the profile.
 
-There is no hardware detection or menu. `TIER` is a fixed distribution/profile choice.
-
-`-ngl 999` means “try to offload all possible layers to the GPU.” It is a request, not a guarantee. The actual GPU/CPU layer split appears once in the `start.bat` startup log.
+`-ngl 999` means “try to offload all possible layers to the GPU.” It is a request, not a guarantee. The actual GPU/CPU layer split appears once in the selected launcher’s startup log.
 
 ### Launch and monitor
 
-Double-click:
+Double-click the launcher for your hardware tier:
 
 ```text
-start.bat
+start_4gb_gpu.bat
+```
+
+```text
+start_6gb_gpu.bat
+```
+
+```text
+start_8gb_gpu.bat
 ```
 
 The server remains in the visible CMD window. Once the model has loaded and the local health endpoint responds, the default browser opens automatically at:
@@ -110,7 +123,7 @@ The server remains in the visible CMD window. Once the model has loaded and the 
 http://127.0.0.1:8080/
 ```
 
-Keep the `start.bat` window open while using the model. Press `Ctrl+C` in that window to stop it.
+Keep the launcher window open while using the model. Press `Ctrl+C` in that window to stop it.
 
 To monitor the running server, open a second window and double-click:
 
@@ -145,25 +158,29 @@ Press `Ctrl+C` in the dashboard window to close it.
 
 | File | Purpose |
 |---|---|
-| `start.bat` | Main launcher. Uses `TIER` to choose a fixed model/profile, starts llamafile, and opens the browser when the server is ready. |
+| `start_4gb_gpu.bat` | 4 GB launcher. Uses `TIER=4` by default, starts llamafile, and opens the browser when the server is ready. |
+| `start_6gb_gpu.bat` | 6 GB launcher. Uses `TIER=6` by default, starts llamafile, and opens the browser when the server is ready. |
+| `start_8gb_gpu.bat` | 8 GB launcher. Uses `TIER=8` by default, starts llamafile, and opens the browser when the server is ready. |
 | `status.bat` | Live terminal dashboard. Polls local server endpoints, Windows CPU/RAM, and NVIDIA GPU data every five seconds. |
 | `server\llamafile-0.10.5.exe` | Llamafile runtime. Download separately; it is not included in Git. |
-| `models\4GB\...gguf` | Designated compact model for 4 GB and currently 6 GB profiles. |
-| `models\8GB\...gguf` | Designated Qwen 9B Q4 model for the 8 GB profile. |
-| `models\4GB\instructions.txt` | Manual model download and 4 GB/6 GB profile notes. |
-| `models\8GB\instructions.txt` | Manual model download and 8 GB profile notes. |
+| `models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf` | Designated Qwen3.5 2B Q8 model for the 4 GB profile. |
+| `models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Designated Qwen3.5 4B Q4 model for the 6 GB profile. |
+| `models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Designated Qwen3.5 9B Q4 model for the 8 GB profile. |
+| `models\4GB\instructions.txt` | Manual model download instructions for the 4 GB profile. |
+| `models\6GB\instructions.txt` | Manual model download instructions for the 6 GB profile. |
+| `models\8GB\instructions.txt` | Manual model download instructions for the 8 GB profile. |
 
 ## Configuration
 
-All settings below are near the top of `start.bat` under the `CONFIGURATION` heading.
+All settings below are near the top of each launcher under the `CONFIGURATION` heading. The three launchers share the same configuration structure and differ by their default `TIER` value.
 
 | Variable | Default | Description |
 |---|---:|---|
-| `TIER` | `8` | Fixed profile to use: `4`, `6`, or `8`. |
-| `LLAMA_RELATIVE_PATH` | `server\llamafile-0.10.5.exe` | Llamafile executable path relative to `start.bat`. |
-| `MODEL_4GB` | Gemma E4B Q2 GGUF | Model path selected when `TIER=4`. |
-| `MODEL_6GB` | same 4 GB path | Model path selected when `TIER=6`; intentionally points at the same compact GGUF for now. |
-| `MODEL_8GB` | Qwen 9B Q4 GGUF | Model path selected when `TIER=8`. |
+| `TIER` | `4` / `6` / `8` | Fixed profile to use; each launcher defaults to the tier in its filename. |
+| `LLAMA_RELATIVE_PATH` | `server\llamafile-0.10.5.exe` | Llamafile executable path relative to the selected launcher. |
+| `MODEL_4GB` | `models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf` | Model path selected when `TIER=4`. |
+| `MODEL_6GB` | `models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Model path selected when `TIER=6`. |
+| `MODEL_8GB` | `models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Model path selected when `TIER=8`. |
 | `HOST` | `127.0.0.1` | Local-only bind address. |
 | `PORT` | `8080` | Server and bundled web UI port. |
 | `CTX` | `65536` | Maximum context window, in tokens. |
@@ -174,7 +191,7 @@ All settings below are near the top of `start.bat` under the `CONFIGURATION` hea
 | `UBATCH_*` | `128` | Prompt micro-batch size. Lower it if prompt ingestion causes GPU out-of-memory errors. |
 | `CACHE_K_*` | `q8_0` | KV-cache K precision. |
 | `CACHE_V_*` | `q8_0` | KV-cache V precision. Flash Attention remains enabled for this configuration. |
-| `USE_NO_MMAP` | `1` if enabled | Controls whether `--no-mmap` is passed. |
+| `USE_NO_MMAP` | `1` | Controls whether `--no-mmap` is passed. |
 | `FLASH_ATTN` | `on` | Flash Attention mode: `on`, `off`, or `auto` where supported. |
 | `JINJA` | `--jinja` | Uses the chat template provided by GGUF metadata. |
 | `ENABLE_METRICS` | `1` | Passes `--metrics`, enabling the local `/metrics` endpoint used by `status.bat`. |
@@ -225,7 +242,7 @@ For the default 8 GB profile, the launcher produces the equivalent of this comma
 llamafile-0.10.5.exe --server -m "MODEL.gguf" --host 127.0.0.1 --port 8080 --jinja -c 65536 -np 1 -ngl 999 -t 8 --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 --batch-size 128 --ubatch-size 128 --metrics --no-mmap
 ```
 
-Exact values depend on `TIER` and the variables in `start.bat`.
+Exact values depend on `TIER` and the variables in the selected launcher.
 
 | Flag | Purpose |
 |---|---|
@@ -286,7 +303,7 @@ Do not pass both `--no-mmap` and `--load-mode none`.
 - NVIDIA GPU model, utilization, VRAM use, temperature, and power via `nvidia-smi`.
 - KV-cache metrics only when the particular llamafile build exports matching metrics.
 
-The dashboard cannot reliably obtain the exact **actual GPU-layer split** after startup. That information is normally printed only during model initialization in the `start.bat` console, for example:
+The dashboard cannot reliably obtain the exact **actual GPU-layer split** after startup. That information is normally printed only during model initialization in the selected launcher’s console, for example:
 
 ```text
 offloading N repeating layers to GPU
@@ -297,7 +314,7 @@ The dashboard’s live NVIDIA VRAM figure remains useful because it reflects act
 
 ## Local API
 
-With `start.bat` running, the service is available at:
+With a launcher running, the service is available at:
 
 ```text
 http://127.0.0.1:8080
@@ -323,7 +340,7 @@ No API key is configured by default. Binding to `127.0.0.1` prevents direct LAN 
 |---|---|
 | `error: invalid argument: --load-mode` | Remove `--load-mode`. Llamafile 0.10.5 does not accept it; use optional `--no-mmap` instead. |
 | Dashboard says metrics are unavailable | Confirm `ENABLE_METRICS=1`; ensure `--metrics` is inside the final continued llamafile command; stop and restart the server. |
-| `--metrics` is shown in the BAT but unavailable | Verify the previous command line ends with `^`; otherwise CMD ends the launch command before `--metrics`. |
+| `--metrics` is shown in the launcher but unavailable | Verify the previous command line ends with `^`; otherwise CMD ends the launch command before `--metrics`. |
 | Browser does not open | Wait for model load, then open `http://127.0.0.1:8080/` manually. Check that port 8080 is not already in use. |
 | Model not found | Confirm the exact filename and folder match `MODEL_4GB`, `MODEL_6GB`, or `MODEL_8GB`. |
 | `TIER must be 4, 6, or 8` | Set `TIER` to exactly `4`, `6`, or `8`. |
