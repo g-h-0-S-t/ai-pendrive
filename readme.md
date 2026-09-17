@@ -19,7 +19,8 @@ ai-pendrive/
 ├── start_8gb_gpu.bat
 ├── status.bat
 ├── server/
-│   └── llamafile-0.10.5.exe
+│   ├── llamafile-0.10.5.exe
+│   └── instructions.txt
 └── models/
     ├── 4GB/
     │   ├── Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf
@@ -36,11 +37,17 @@ Model weights and the llamafile executable are intentionally excluded from Git.
 
 ### Install the runtime
 
-Download the Windows executable for llamafile 0.10.5 and save it as:
+Download llamafile 0.10.5 from the GitHub releases page:
+
+https://github.com/mozilla-ai/llamafile/releases/tag/0.10.5
+
+On the releases page, the download link looks like `llamafile-0.10.5`. Save it with a `.exe` extension at:
 
 ```text
 server\llamafile-0.10.5.exe
 ```
+
+For step-by-step download guidance, see `server\instructions.txt`.
 
 Each launcher expects that exact location. If you use a different build or filename, edit this variable near the top of the selected launcher:
 
@@ -163,6 +170,7 @@ Press `Ctrl+C` in the dashboard window to close it.
 | `start_8gb_gpu.bat` | 8 GB launcher. Uses `TIER=8` by default, starts llamafile, and opens the browser when the server is ready. |
 | `status.bat` | Live terminal dashboard. Polls local server endpoints, Windows CPU/RAM, and NVIDIA GPU data every five seconds. |
 | `server\llamafile-0.10.5.exe` | Llamafile runtime. Download separately; it is not included in Git. |
+| `server\instructions.txt` | Manual llamafile download instructions for the runtime. |
 | `models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf` | Designated Qwen3.5 2B Q8 model for the 4 GB profile. |
 | `models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Designated Qwen3.5 4B Q4 model for the 6 GB profile. |
 | `models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Designated Qwen3.5 9B Q4 model for the 8 GB profile. |
