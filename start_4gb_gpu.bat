@@ -76,8 +76,8 @@ set "THREADS_8GB=8"
 
 rem Maximum model layers offloaded to GPU. 999 means attempt all layers that fit.
 rem Reduce only when a profile needs CPU offload to avoid GPU out-of-memory.
-set "GPU_LAYERS_4GB=18"
-set "GPU_LAYERS_6GB=32"
+set "GPU_LAYERS_4GB=999"
+set "GPU_LAYERS_6GB=999"
 set "GPU_LAYERS_8GB=999"
 
 rem Prompt batch / micro-batch sizes. Larger is faster for prompt ingestion but
