@@ -93,8 +93,8 @@ Each launcher defaults to the tier in its filename:
 
 | Launcher | `TIER` | Model path | GPU-layer target | Intended hardware |
 |---|---:|---|---:|---|
-| `start_4gb_gpu.bat` | `4` | `models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf` | `18` | Approximately 4 GB VRAM |
-| `start_6gb_gpu.bat` | `6` | `models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | `32` | Approximately 6 GB VRAM |
+| `start_4gb_gpu.bat` | `4` | `models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf` | `999` | Approximately 4 GB VRAM |
+| `start_6gb_gpu.bat` | `6` | `models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | `999` | Approximately 6 GB VRAM |
 | `start_8gb_gpu.bat` | `8` | `models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | `999` | Approximately 8 GB or more VRAM |
 
 There is no hardware detection or menu. `TIER` is a fixed distribution/profile choice. The launchers contain all three model paths, but use the path selected by `TIER`; edit `TIER` only when intentionally changing the profile.
@@ -186,7 +186,7 @@ All settings below are near the top of each launcher under the `CONFIGURATION` h
 | `CTX` | `65536` | Maximum context window, in tokens. |
 | `PARALLEL` | `1` | Server slots. Keep `1` when one conversation needs the entire configured context. |
 | `THREADS_*` | `6 / 8 / 8` | CPU thread count for the chosen profile. |
-| `GPU_LAYERS_*` | `18 / 32 / 999` | Maximum model layers requested on GPU for each profile. |
+| `GPU_LAYERS_*` | `999 / 999 / 999` | Maximum model layers requested on GPU for each profile. |
 | `BATCH_*` | `128` | Prompt-processing batch size. More can improve prompt ingestion but needs more VRAM. |
 | `UBATCH_*` | `128` | Prompt micro-batch size. Lower it if prompt ingestion causes GPU out-of-memory errors. |
 | `CACHE_K_*` | `q8_0` | KV-cache K precision. |
