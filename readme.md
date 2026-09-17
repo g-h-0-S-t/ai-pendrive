@@ -73,7 +73,7 @@ models\6GB\instructions.txt
 models\8GB\instructions.txt
 ```
 
-The launchers do not download models automatically. Run the appropriate Hugging Face CLI command from the AI directory:
+The launchers do not download models automatically. Run the appropriate Hugging Face CLI command from the ai-pendrive directory:
 
 ```bat
 hf download hf://HauhauCS/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf --local-dir "models\4GB"
