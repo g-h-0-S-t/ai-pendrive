@@ -1,5 +1,4 @@
 # Llama.cpp / llamafile runtime binaries
-server/
 llamafile-*.exe
 llama-cli
 llama-server

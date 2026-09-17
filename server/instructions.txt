@@ -1,0 +1,3 @@
+Download server from https://github.com/mozilla-ai/llamafile/releases/tag/0.10.5
+The link in the page should look like "llamafile-0.10.5"
+Save it with a ".exe" extension, like "llamafile-0.10.5.exe"
