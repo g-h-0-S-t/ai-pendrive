@@ -1,4 +1,8 @@
 /target/
 /models/
+/runtimes/
+/logs/
+/config.json
 *.partial
+*.lock
 *.log

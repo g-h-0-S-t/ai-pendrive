@@ -1,75 +1,69 @@
 # AI Pendrive Rust launcher prototype
 
-This branch contains an intentionally small, auditable Rust replacement for manual GPU-tier batch-file selection. It is a CLI prototype, not yet a GUI or a complete inference runtime. It does not alter the existing batch scripts on `master`.
+This branch is an auditable Rust replacement for manual GPU-tier batch-file selection. It is a CLI prototype, not yet a GUI or a complete inference runtime. It does not alter `master` or its existing batch scripts.
 
-## What it does
+## Current capabilities
 
 - Detects operating system, CPU architecture, total/available RAM, free disk space, and NVIDIA GPU/VRAM when `nvidia-smi` is available.
-- Reports GPU capability as **unknown** rather than guessing when it cannot probe it safely.
+- Treats unprobed GPU capability as **unknown** rather than guessing.
 - Filters profiles by OS, architecture, RAM, disk, runtime profile, and known NVIDIA VRAM.
-- Provides a native interactive `setup` wizard and durable portable `config.json` selection state.
-- Provides `status` for a one-command view of hardware, selected model, verification state, and runtime availability.
-- Downloads only to a temporary partial file, verifies byte size and SHA-256, then atomically moves the file into `models/`.
-- Re-verifies model data before launch.
-- Finds portable runtime binaries in `runtimes/` or accepts an explicit runtime override.
+- Provides `setup`, durable portable `config.json`, `status`, and `preflight` commands.
+- Downloads through a `.partial` file, attempts HTTP Range resumption, validates declared content length when present, and verifies SHA-256 before making a model available.
+- Prevents two launcher instances from writing the same model through a per-model lock file.
+- Provides `cancel-download` that removes only a partial download and refuses when a completed model is present.
+- Writes append-only local operational logs to `logs/launcher.log`.
+- Finds portable runtime binaries in `runtimes/` or accepts a runtime override.
 
-The runtime labels `cpu`, `nvidia_cuda`, `metal`, and `vulkan` are catalog policies. They do not guarantee that an arbitrary runtime binary works on a given device. Validate each supported model/runtime pair before enabling it for customers.
+Runtime labels (`cpu`, `nvidia_cuda`, `metal`, `vulkan`) are catalog policies, not a guarantee that every runtime binary works on every machine. Validate each model/runtime pair before enabling it for customers.
 
 ## Build
 
 ```sh
 cd rust-launcher
+cargo fmt --all -- --check
+cargo check --all-targets
+cargo test
 cargo build --release
 ```
 
-The executable is written to `target/release/` (`ai-pendrive-launcher.exe` on Windows).
-
 ## First-run setup
-
-Run the setup wizard from the portable directory:
 
 ```sh
 ./target/release/ai-pendrive-launcher setup
 ```
 
-The wizard:
+The wizard inspects the machine, lists only enabled compatible profiles, saves the selection to `config.json`, then asks before downloading. The repository intentionally ships disabled templates, so setup reports no eligible profile until you add an approved model record.
 
-1. Inspects the computer.
-2. Lists only enabled, compatible profiles.
-3. Requires the user to choose a profile.
-4. Saves the chosen profile to `config.json` in the portable directory.
-5. Requires a separate explicit `y`/`yes` confirmation before it starts downloading.
-
-The repository intentionally ships only disabled example profiles. Therefore the wizard correctly reports no eligible profile until you add a real reviewed profile to `models.json`.
-
-## Non-interactive setup
-
-Automation must name a specific profile and explicitly accept download. This prevents an unattended script from silently downloading a multi-gigabyte file.
+For automation, both the target and download approval must be explicit:
 
 ```sh
-# Save a chosen profile but do not download it
 ./ai-pendrive setup --model vendor-model-q4 --skip-download
-
-# Download only after explicit acceptance
 ./ai-pendrive setup --model vendor-model-q4 --accept-download
 ```
 
-## Status and launch
+## Operational commands
 
 ```sh
-# Hardware, selected profile, model verification, and runtime availability
+# Current hardware, selected profile, local model state, runtime, and log location
 ./ai-pendrive status
 
-# Launch the model selected during setup
-./ai-pendrive launch -- --port 8080
+# Fail fast before launch; checks selection/profile eligibility/model/runtime
+./ai-pendrive preflight
+./ai-pendrive preflight vendor-model-q4
 
-# Launch a named profile instead of the saved selection
-./ai-pendrive launch vendor-model-q4 -- --port 8080
+# Resume an interrupted download when the server honors HTTP Range requests
+./ai-pendrive download vendor-model-q4
+
+# Delete only an incomplete partial download; never a verified completed model
+./ai-pendrive cancel-download vendor-model-q4
+
+# Launch the selected configured model
+./ai-pendrive launch -- --port 8080
 ```
 
-If no setup has been completed, `status` remains successful and tells the user to run `setup`; `launch` refuses with an actionable error.
+A failed/incomplete download keeps `models/<file>.partial`; rerunning the same `download` command sends a Range request from the partial size. If the server ignores Range, the launcher discards the partial and starts over rather than appending incorrect bytes. If a downloaded file fails SHA-256 validation, the partial is retained for inspection and can be removed with `cancel-download`.
 
-## Runtime layout
+## Portable layout
 
 ```text
 AI-Pendrive/
@@ -77,38 +71,33 @@ AI-Pendrive/
   models.json
   config.json
   models/
+    model.gguf.partial
+    model.gguf.lock
   runtimes/
     llama-server-cpu[.exe]
     llama-server-cuda[.exe]
   logs/
+    launcher.log
 ```
 
-The launcher checks `runtimes/` first, then `AI_PENDRIVE_RUNTIME`, then an explicit `launch --runtime /path/to/runtime` override. Candidate runtime names depend on the chosen profile.
+## Logs and privacy
 
-## Safety requirements for real profiles
+Logs are local and append-only. They record timestamps, event level, selected model IDs, download/verification/runtime events, and sanitized errors. They do not send telemetry or upload prompts, model contents, API keys, or user files.
+
+## Real model profile checklist
 
 Before setting `enabled: true` in `models.json`, verify:
 
-1. The model license permits your commercial use and distribution method.
-2. The URL is official or expressly authorized.
-3. `size_bytes` and the 64-character `sha256` match the immutable source file.
-4. The model has been tested against the declared RAM, disk, OS, architecture, GPU, and runtime profile.
-5. A compatible runtime binary is included or clearly supported.
+1. Commercial-use and redistribution rights.
+2. Official or expressly authorized source URL.
+3. Exact immutable file size and 64-character SHA-256.
+4. Tested RAM, disk, OS, architecture, GPU, and runtime constraints.
+5. A compatible runtime binary you bundle or clearly support.
 
-## Tests and CI
+## Known limits
 
-```sh
-cargo fmt --all -- --check
-cargo check --all-targets
-cargo test
-```
-
-GitHub Actions runs formatting, compile, and test checks on Ubuntu, Windows, and macOS for launcher changes.
-
-## Current limits
-
-- Only NVIDIA probing via `nvidia-smi` is implemented. AMD, Intel, Apple unified-memory, and Vulkan capability checks need validated platform-specific probes.
-- Partial downloads do not resume yet.
-- The catalog is local and unsigned; production should use a versioned signed catalog verified with a pinned public key.
-- No GUI, installer, updater, licensing, code signing, telemetry, or bundled inference runtime is included yet.
-- Do not sell or merge this work to `master` before actual model/runtime testing, signing, packaging, and legal review are complete.
+- Only NVIDIA probing through `nvidia-smi` is implemented. AMD, Intel, Apple unified memory, and Vulkan support need validated platform-specific probes.
+- Resume works only when the download server supports byte ranges. The launcher safely restarts otherwise.
+- The local catalog is not signed yet. A commercial release should verify a versioned signed catalog using a pinned public key.
+- No GUI, installer, auto-updater, licensing, code signing, telemetry, or bundled inference runtime exists yet.
+- Do not sell or merge this work to `master` before real model/runtime testing, code signing, packaging, and license review.
