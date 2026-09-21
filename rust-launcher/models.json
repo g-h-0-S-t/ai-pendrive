@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "example-light",
+      "name": "Light profile — configure an official model",
+      "description": "Template for a small local GGUF model. It is disabled and cannot download until you add an official URL, exact byte size, and SHA-256.",
+      "filename": "example-light.gguf",
+      "url": "https://example.invalid/model.gguf",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 2000000000,
+      "min_memory_gib": 6.0,
+      "min_free_disk_gib": 5.0,
+      "supported_os": ["windows", "macos", "linux"],
+      "supported_arch": ["x86_64", "aarch64"],
+      "enabled": false
+    },
+    {
+      "id": "example-balanced",
+      "name": "Balanced profile — configure an official model",
+      "description": "Template for a medium local GGUF model. Keep disabled until its model license, download source, exact size, and SHA-256 are reviewed.",
+      "filename": "example-balanced.gguf",
+      "url": "https://example.invalid/model.gguf",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 5000000000,
+      "min_memory_gib": 12.0,
+      "min_free_disk_gib": 10.0,
+      "supported_os": ["windows", "macos", "linux"],
+      "supported_arch": ["x86_64", "aarch64"],
+      "enabled": false
+    },
+    {
+      "id": "example-power",
+      "name": "Power profile — configure an official model",
+      "description": "Template for a large local GGUF model. Keep disabled until it has a permitted commercial distribution path and validated hardware requirements.",
+      "filename": "example-power.gguf",
+      "url": "https://example.invalid/model.gguf",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size_bytes": 9000000000,
+      "min_memory_gib": 20.0,
+      "min_free_disk_gib": 18.0,
+      "supported_os": ["windows", "macos", "linux"],
+      "supported_arch": ["x86_64", "aarch64"],
+      "enabled": false
+    }
+  ]
+}

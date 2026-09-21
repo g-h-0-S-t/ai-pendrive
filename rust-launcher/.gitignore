@@ -1,0 +1,4 @@
+/target/
+/models/
+*.partial
+*.log
