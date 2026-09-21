@@ -1,18 +1,19 @@
 # AI Pendrive Rust launcher prototype
 
-This branch contains an intentionally small, auditable Rust replacement for manual GPU-tier batch-file selection. It is a CLI prototype, not yet a GUI or a complete inference runtime. It never changes the repository's existing launch scripts.
+This branch contains an intentionally small, auditable Rust replacement for manual GPU-tier batch-file selection. It is a CLI prototype, not yet a GUI or a complete inference runtime. It does not alter the existing batch scripts on `master`.
 
 ## What it does
 
-- Detects the current operating system and CPU architecture.
-- Reads total/available RAM and free disk space.
-- Lists only model profiles that meet the declared OS, architecture, RAM, and disk requirements.
-- Refuses a download or launch when the declared compatibility requirements are not met.
-- Downloads to a temporary partial file, verifies exact size and SHA-256, and only then moves the model into `models/`.
-- Re-verifies model size and SHA-256 before launching a runtime.
-- Supports a portable directory so executable, manifest, runtime, models, and logs can live on a USB SSD.
+- Detects operating system, CPU architecture, total/available RAM, and free disk space.
+- Tries an NVIDIA probe through `nvidia-smi`; it reports **unknown** when the command is unavailable or unusable instead of guessing GPU compatibility.
+- Filters model profiles by OS, architecture, RAM, disk requirements, runtime profile, and—where known—NVIDIA VRAM.
+- Refuses downloads and launches that fail these declared safety checks.
+- Downloads only to a temporary partial file, verifies exact byte size and SHA-256, then moves the verified file into `models/`.
+- Re-verifies the model file immediately before launch.
+- Supports a portable directory so launcher, catalog, models, runtimes, and logs can be kept together on a USB SSD.
+- Selects runtime binaries from `runtimes/` automatically, with an explicit command-line or environment override when needed.
 
-GPU VRAM detection is deliberately not claimed yet. Reliable GPU capability detection needs platform-specific adapters and a tested compatibility matrix. The first safe release should default to CPU/RAM-safe profiles and add validated back ends individually.
+The launcher currently supports four runtime profile labels: `cpu`, `nvidia_cuda`, `metal`, and `vulkan`. These are catalog policies, not a claim that every runtime binary works on every device. Test each runtime/profile pair before enabling it for customers.
 
 ## Build
 
@@ -27,41 +28,46 @@ The executable is written to `target/release/` (`ai-pendrive-launcher.exe` on Wi
 
 ## Commands
 
-Run from the `rust-launcher` directory, or pass an absolute `--manifest` path.
-
 ```sh
-# Inspect the host in JSON
+# Inspect OS, architecture, memory, disk, and GPU-probe result as JSON
 ./target/release/ai-pendrive-launcher inspect
 
-# List safe and unavailable profiles, with reasons
+# List available and unavailable model profiles with exact reasons
 ./target/release/ai-pendrive-launcher list
 
 # Download a compatible, enabled model
 ./target/release/ai-pendrive-launcher download model-id
 
-# Re-check an existing model before use
+# Verify a previously downloaded model
 ./target/release/ai-pendrive-launcher verify model-id
 
-# Launch a verified model through a configured local runtime
-AI_PENDRIVE_RUNTIME=/path/to/llama-server ./target/release/ai-pendrive-launcher launch model-id -- --port 8080
+# Launch through an automatically selected portable runtime
+./target/release/ai-pendrive-launcher launch model-id -- --port 8080
+
+# Override the runtime explicitly
+./target/release/ai-pendrive-launcher launch model-id --runtime /path/to/llama-server -- --port 8080
 ```
 
-On Windows PowerShell, set the runtime for the current session first:
-
-```powershell
-$env:AI_PENDRIVE_RUNTIME = "C:\AI-Pendrive\runtimes\llama-server.exe"
-.\target\release\ai-pendrive-launcher.exe launch model-id -- --port 8080
-```
-
-## Portable mode
-
-Use `--portable-dir` to make the launcher use a folder on a USB drive for the manifest and model store:
+If an NVIDIA profile cannot be verified but you have independently tested a compatible CPU-capable runtime, you may explicitly permit the policy fallback:
 
 ```sh
-./ai-pendrive-launcher --portable-dir /media/AI-Pendrive list
+./target/release/ai-pendrive-launcher --allow-cpu-fallback list
 ```
 
-A practical release folder is:
+This flag changes catalog eligibility only. It does **not** transform a CUDA-only executable into a CPU runtime. Use a compatible runtime binary.
+
+## Runtime layout
+
+By default, the launcher searches the portable directory for runtime binaries in this order:
+
+| Profile | Candidate names |
+|---|---|
+| `cpu` | `llama-server-cpu`, `llama-server`, `llamafile` |
+| `nvidia_cuda` | `llama-server-cuda`, `llama-server` |
+| `metal` | `llama-server-metal`, `llama-server` |
+| `vulkan` | `llama-server-vulkan`, `llama-server` |
+
+The `.exe` suffix is automatically used on Windows. Put the selected executable in `runtimes/`, set `AI_PENDRIVE_RUNTIME`, or pass `--runtime`.
 
 ```text
 AI-Pendrive/
@@ -69,47 +75,47 @@ AI-Pendrive/
   models.json
   models/
   runtimes/
+    llama-server-cpu[.exe]
+    llama-server-cuda[.exe]
   logs/
+```
+
+## Portable mode
+
+Use `--portable-dir` to make the launcher resolve the manifest, model store, and runtimes from a USB directory:
+
+```sh
+./ai-pendrive-launcher --portable-dir /media/AI-Pendrive list
 ```
 
 ## Adding a real model
 
-`models.json` contains disabled templates only. This is intentional: the launcher refuses placeholder checksums and disabled profiles. Before enabling a model, verify all of the following:
+`models.json` contains disabled templates only. The launcher refuses a disabled model and rejects all-zero placeholder hashes. Before enabling a model, confirm:
 
-1. The model license permits the intended commercial use and distribution path.
-2. The download URL is controlled by, or explicitly authorized by, the model publisher.
-3. `size_bytes` is the exact release-file size.
-4. `sha256` is an exact 64-character SHA-256 for that immutable file.
-5. The RAM/disk requirements have been validated on supported operating systems and hardware.
-6. The runtime can load the selected file format.
+1. The model license permits your commercial use and chosen distribution path.
+2. The model source URL is official or explicitly authorized.
+3. `size_bytes` matches the immutable release file exactly.
+4. `sha256` is an exact 64-character SHA-256 for that file.
+5. RAM, disk, GPU/VRAM, runtime, and operating-system requirements are tested rather than guessed.
+6. The runtime profile points to an actual binary you ship or support.
 
-Example profile fields:
+## Tests and CI
 
-```json
-{
-  "id": "vendor-model-q4",
-  "filename": "vendor-model-q4.gguf",
-  "url": "https://official.example/model.gguf",
-  "sha256": "exact_64_character_sha256_here",
-  "size_bytes": 4680000000,
-  "min_memory_gib": 8.0,
-  "min_free_disk_gib": 7.0,
-  "supported_os": ["windows", "macos", "linux"],
-  "supported_arch": ["x86_64", "aarch64"],
-  "enabled": true
-}
+Run the local checks with:
+
+```sh
+cargo fmt --all -- --check
+cargo check --all-targets
+cargo test
 ```
 
-## Safety model
-
-The manifest is a local policy file in this prototype. A production release should fetch a versioned signed model catalog over HTTPS, pin the public key in the application, validate catalog signatures, and retain local verified manifests for offline use. HTTPS plus a file hash protects a file transfer; a signed catalog protects the model metadata itself.
-
-Do not add a model just because it is popular. Its model license, redistribution terms, support status, checksum, runtime compatibility, and measured resource requirements are all release requirements.
+GitHub Actions runs those checks on Ubuntu, Windows, and macOS for changes affecting `rust-launcher/`. The tests intentionally use the disabled templates: they verify that inspection works and unsafe/unknown downloads are refused without contacting any model host.
 
 ## Known limits / next work
 
-- CPU/RAM/disk/OS/architecture checks are implemented; GPU and VRAM detection are not.
-- Downloads are safe but do not resume partial downloads yet.
-- The runtime command is supplied via `AI_PENDRIVE_RUNTIME`; it does not bundle `llama.cpp` or `llamafile`.
-- No updater, licensing, GUI, code signing, telemetry, or cross-platform installer is included.
-- Add tests, signed catalog support, Windows/macOS/Linux packaging, and a small GUI before treating this as a commercial release.
+- Only NVIDIA detection via `nvidia-smi` is implemented; AMD, Intel, Apple unified-memory, and Vulkan capability checks need platform-specific probing and device testing.
+- GPU information remains unknown when the probe is unavailable; that is safer than estimating VRAM.
+- Downloads do not resume yet.
+- The local catalog is not cryptographically signed yet. A commercial release should verify a versioned signed catalog using a pinned public key.
+- No GUI, updater, licensing system, code signing, installer, telemetry, or bundled inference runtime is included yet.
+- Do not merge this into `master` or sell it before you test actual model/runtime combinations and complete code-signing and release packaging.

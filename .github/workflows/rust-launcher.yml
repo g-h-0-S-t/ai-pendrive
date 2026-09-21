@@ -1,0 +1,38 @@
+name: Rust launcher checks
+
+on:
+  push:
+    branches: [master, rust-launcher-prototype]
+    paths:
+      - 'rust-launcher/**'
+      - '.github/workflows/rust-launcher.yml'
+  pull_request:
+    paths:
+      - 'rust-launcher/**'
+      - '.github/workflows/rust-launcher.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: rust-launcher
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Compile
+        run: cargo check --all-targets
+      - name: Test
+        run: cargo test

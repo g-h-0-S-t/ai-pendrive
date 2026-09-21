@@ -1,6 +1,6 @@
 [package]
 name = "ai-pendrive-launcher"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Hardware-aware portable local AI launcher"
 license = "MIT"
@@ -8,13 +8,13 @@ license = "MIT"
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
+fs2 = "0.4"
 hex = "0.4"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 sysinfo = "0.32"
-fs2 = "0.4"
 
 [profile.release]
 strip = true
