@@ -4,11 +4,13 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
-    io::{Read, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 use sysinfo::System;
+
+const CONFIG_FILE: &str = "config.json";
 
 #[derive(Parser, Debug)]
 #[command(name = "ai-pendrive", version, about = "Hardware-aware local AI launcher")]
@@ -27,9 +29,18 @@ struct Cli {
 enum Commands {
     Inspect,
     List,
+    Status,
+    Setup {
+        #[arg(long, help = "Select this model profile without the interactive picker")]
+        model: Option<String>,
+        #[arg(long, help = "Required with --model to permit a non-interactive download")]
+        accept_download: bool,
+        #[arg(long, help = "Save the selection but do not download the model")]
+        skip_download: bool,
+    },
     Download { id: String },
     Verify { id: String },
-    Launch { id: String, #[arg(long)] runtime: Option<String>, #[arg(last = true)] args: Vec<String> },
+    Launch { id: Option<String>, #[arg(long)] runtime: Option<String>, #[arg(last = true)] args: Vec<String> },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -91,6 +102,12 @@ impl RuntimeProfile {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AppConfig {
+    version: u32,
+    selected_model_id: String,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let base = cli.portable_dir.unwrap_or_else(default_base_dir);
@@ -98,13 +115,19 @@ fn main() -> Result<()> {
     let manifest = load_manifest(&manifest_path)?;
     let machine = inspect_machine(&base);
 
-    match cli.command.unwrap_or(Commands::List) {
+    match cli.command.unwrap_or(Commands::Status) {
         Commands::Inspect => println!("{}", serde_json::to_string_pretty(&machine)?),
         Commands::List => list_models(&manifest, &machine, cli.allow_cpu_fallback),
+        Commands::Status => show_status(&manifest, &machine, &base, cli.allow_cpu_fallback),
+        Commands::Setup { model, accept_download, skip_download } => setup(&manifest, &machine, &base, cli.allow_cpu_fallback, model.as_deref(), accept_download, skip_download),
         Commands::Download { id } => download_model(find_safe_model(&manifest, &machine, &id, cli.allow_cpu_fallback)?, &base),
         Commands::Verify { id } => verify_model(find_model(&manifest, &id)?, &base),
         Commands::Launch { id, runtime, args } => {
-            let model = find_safe_model(&manifest, &machine, &id, cli.allow_cpu_fallback)?;
+            let selected = match id {
+                Some(id) => id,
+                None => load_config(&base)?.selected_model_id,
+            };
+            let model = find_safe_model(&manifest, &machine, &selected, cli.allow_cpu_fallback)?;
             launch_model(model, &base, runtime.as_deref(), &args)
         }
     }
@@ -118,11 +141,36 @@ fn resolve_manifest(base: &Path, manifest: &Path) -> PathBuf {
     if manifest.is_absolute() { manifest.to_path_buf() } else { base.join(manifest) }
 }
 
+fn config_path(base: &Path) -> PathBuf { base.join(CONFIG_FILE) }
+
 fn load_manifest(path: &Path) -> Result<Manifest> {
     let raw = fs::read_to_string(path).with_context(|| format!("Could not read model manifest: {}", path.display()))?;
     let manifest: Manifest = serde_json::from_str(&raw).context("Model manifest is not valid JSON")?;
     if manifest.version != 1 { bail!("Unsupported model manifest version {}", manifest.version); }
     Ok(manifest)
+}
+
+fn load_config(base: &Path) -> Result<AppConfig> {
+    let path = config_path(base);
+    let raw = fs::read_to_string(&path).with_context(|| format!("No setup configuration found at {}. Run 'ai-pendrive setup' first.", path.display()))?;
+    let config: AppConfig = serde_json::from_str(&raw).context("Configuration is not valid JSON")?;
+    if config.version != 1 { bail!("Unsupported configuration version {}", config.version); }
+    Ok(config)
+}
+
+fn save_config(base: &Path, config: &AppConfig) -> Result<()> {
+    fs::create_dir_all(base)?;
+    let final_path = config_path(base);
+    let temporary_path = base.join(format!("{CONFIG_FILE}.partial"));
+    let json = serde_json::to_vec_pretty(config)?;
+    {
+        let mut file = File::create(&temporary_path)?;
+        file.write_all(&json)?;
+        file.write_all(b"\n")?;
+        file.sync_all()?;
+    }
+    fs::rename(temporary_path, final_path)?;
+    Ok(())
 }
 
 fn inspect_machine(base: &Path) -> Machine {
@@ -147,40 +195,131 @@ fn probe_gpu() -> GpuInfo {
             let mut fields = line.splitn(2, ',').map(str::trim);
             let name = fields.next().filter(|value| !value.is_empty()).map(ToOwned::to_owned);
             let vram_mib = fields.next().and_then(|value| value.parse::<f64>().ok());
-            GpuInfo {
-                probe: "nvidia-smi".into(), available: name.is_some() && vram_mib.is_some(), name,
-                vram_gib: vram_mib.map(|value| value / 1024.0),
-                note: "NVIDIA GPU information obtained from nvidia-smi.".into(),
-            }
+            GpuInfo { probe: "nvidia-smi".into(), available: name.is_some() && vram_mib.is_some(), name, vram_gib: vram_mib.map(|value| value / 1024.0), note: "NVIDIA GPU information obtained from nvidia-smi.".into() }
         }
-        Ok(_) => GpuInfo {
-            probe: "nvidia-smi".into(), available: false, name: None, vram_gib: None,
-            note: "nvidia-smi ran but did not return a usable NVIDIA GPU record.".into(),
-        },
-        Err(_) => GpuInfo {
-            probe: "none".into(), available: false, name: None, vram_gib: None,
-            note: "No supported GPU probe was available. GPU capability is unknown; CPU profiles remain available.".into(),
-        },
+        Ok(_) => GpuInfo { probe: "nvidia-smi".into(), available: false, name: None, vram_gib: None, note: "nvidia-smi ran but did not return a usable NVIDIA GPU record.".into() },
+        Err(_) => GpuInfo { probe: "none".into(), available: false, name: None, vram_gib: None, note: "No supported GPU probe was available. GPU capability is unknown; CPU profiles remain available.".into() },
     }
 }
 
 fn bytes_to_gib(bytes: u64) -> f64 { bytes as f64 / 1024.0_f64.powi(3) }
 
-fn list_models(manifest: &Manifest, machine: &Machine, allow_cpu_fallback: bool) {
+fn print_machine(machine: &Machine) {
     println!("Machine: {} {} | {:.1} GiB RAM ({:.1} GiB available) | {:.1} GiB disk free", machine.os, machine.arch, machine.memory_gib, machine.available_memory_gib, machine.free_disk_gib);
     match (&machine.gpu.name, machine.gpu.vram_gib) {
         (Some(name), Some(vram)) => println!("GPU: {name} | {vram:.1} GiB VRAM ({})", machine.gpu.probe),
         _ => println!("GPU: unknown ({})", machine.gpu.note),
     }
+}
+
+fn list_models(manifest: &Manifest, machine: &Machine, allow_cpu_fallback: bool) {
+    print_machine(machine);
     println!();
-    for model in &manifest.models {
-        let reasons = incompatibilities(model, machine, allow_cpu_fallback);
-        let status = if reasons.is_empty() { "SAFE" } else { "UNAVAILABLE" };
-        println!("[{status}] {} ({}) [{}]", model.name, model.id, model.runtime_profile.as_str());
-        println!("  {}", model.description);
-        println!("  Download: {:.2} GiB", bytes_to_gib(model.size_bytes));
-        if !reasons.is_empty() { println!("  Reason: {}", reasons.join("; ")); }
+    for model in &manifest.models { print_model(model, incompatibilities(model, machine, allow_cpu_fallback).as_slice()); }
+}
+
+fn print_model(model: &Model, reasons: &[String]) {
+    let status = if reasons.is_empty() { "SAFE" } else { "UNAVAILABLE" };
+    println!("[{status}] {} ({}) [{}]", model.name, model.id, model.runtime_profile.as_str());
+    println!("  {}", model.description);
+    println!("  Download: {:.2} GiB | Minimum RAM: {:.1} GiB | Minimum disk: {:.1} GiB", bytes_to_gib(model.size_bytes), model.min_memory_gib, model.min_free_disk_gib);
+    if let Some(vram) = model.min_vram_gib { println!("  Minimum NVIDIA VRAM: {vram:.1} GiB"); }
+    if !reasons.is_empty() { println!("  Reason: {}", reasons.join("; ")); }
+}
+
+fn show_status(manifest: &Manifest, machine: &Machine, base: &Path, allow_cpu_fallback: bool) -> Result<()> {
+    print_machine(machine);
+    println!("Portable directory: {}", base.display());
+    let config = match load_config(base) {
+        Ok(config) => config,
+        Err(_) => {
+            println!("Setup: not configured. Run 'ai-pendrive setup'.");
+            return Ok(());
+        }
+    };
+    let model = match find_model(manifest, &config.selected_model_id) {
+        Ok(model) => model,
+        Err(_) => {
+            println!("Setup: selected model '{}' is not present in the current manifest.", config.selected_model_id);
+            return Ok(());
+        }
+    };
+    println!("Selected model: {} ({})", model.name, model.id);
+    let reasons = incompatibilities(model, machine, allow_cpu_fallback);
+    if reasons.is_empty() { println!("Compatibility: eligible"); } else { println!("Compatibility: unavailable — {}", reasons.join("; ")); }
+    let path = model_path(model, base);
+    if !path.exists() {
+        println!("Model file: missing ({})", path.display());
+    } else {
+        match verify_model(model, base) {
+            Ok(()) => println!("Model file: verified"),
+            Err(error) => println!("Model file: failed verification — {error:#}"),
+        }
     }
+    match resolve_runtime(&model.runtime_profile, base, None) {
+        Ok(runtime) => println!("Runtime: {}", runtime.display()),
+        Err(error) => println!("Runtime: unavailable — {error:#}"),
+    }
+    Ok(())
+}
+
+fn setup(manifest: &Manifest, machine: &Machine, base: &Path, allow_cpu_fallback: bool, requested_id: Option<&str>, accept_download: bool, skip_download: bool) -> Result<()> {
+    if accept_download && requested_id.is_none() { bail!("--accept-download requires --model <id> so setup remains explicit in non-interactive use"); }
+    if accept_download && skip_download { bail!("Choose either --accept-download or --skip-download, not both"); }
+    print_machine(machine);
+    println!("Portable directory: {}", base.display());
+    let selected = match requested_id {
+        Some(id) => find_safe_model(manifest, machine, id, allow_cpu_fallback)?,
+        None => choose_model_interactively(manifest, machine, allow_cpu_fallback)?,
+    };
+    println!();
+    println!("Selected: {} ({})", selected.name, selected.id);
+    println!("Runtime profile: {}", selected.runtime_profile.as_str());
+    println!("Download size: {:.2} GiB", bytes_to_gib(selected.size_bytes));
+    println!("Minimum RAM: {:.1} GiB | Minimum disk: {:.1} GiB", selected.min_memory_gib, selected.min_free_disk_gib);
+    if let Some(vram) = selected.min_vram_gib { println!("Minimum NVIDIA VRAM: {vram:.1} GiB"); }
+    save_config(base, &AppConfig { version: 1, selected_model_id: selected.id.clone() })?;
+    println!("Saved selection to {}", config_path(base).display());
+
+    if skip_download {
+        println!("Download skipped. Run 'ai-pendrive download {}' after configuring an enabled, verified profile.", selected.id);
+        return Ok(());
+    }
+    let should_download = if requested_id.is_some() { accept_download } else { confirm("Download and verify this model now? [y/N] ")? };
+    if !should_download {
+        println!("Download not started. Your selection was saved.");
+        return Ok(());
+    }
+    download_model(selected, base)
+}
+
+fn choose_model_interactively<'a>(manifest: &'a Manifest, machine: &Machine, allow_cpu_fallback: bool) -> Result<&'a Model> {
+    let eligible: Vec<&Model> = manifest.models.iter().filter(|model| incompatibilities(model, machine, allow_cpu_fallback).is_empty()).collect();
+    if eligible.is_empty() {
+        println!();
+        println!("No eligible model profiles are available.");
+        println!("Run 'ai-pendrive list' to see every profile and why it is unavailable.");
+        bail!("Setup cannot continue without an enabled compatible model profile")
+    }
+    println!();
+    println!("Eligible profiles:");
+    for (index, model) in eligible.iter().enumerate() {
+        println!("  {}) {} — {:.2} GiB, {}", index + 1, model.name, bytes_to_gib(model.size_bytes), model.runtime_profile.as_str());
+    }
+    print!("Choose a profile number [1-{}]: ", eligible.len());
+    io::stdout().flush()?;
+    let mut answer = String::new();
+    io::stdin().read_line(&mut answer)?;
+    let index = answer.trim().parse::<usize>().context("Enter a profile number")?;
+    eligible.get(index.saturating_sub(1)).copied().context("Profile selection is out of range")
+}
+
+fn confirm(prompt: &str) -> Result<bool> {
+    print!("{prompt}");
+    io::stdout().flush()?;
+    let mut answer = String::new();
+    io::stdin().read_line(&mut answer)?;
+    Ok(matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes"))
 }
 
 fn find_model<'a>(manifest: &'a Manifest, id: &str) -> Result<&'a Model> {
