@@ -5,7 +5,7 @@ set "SELF_DIR=%~dp0"
 rem ============================================================================
 rem status.bat - Llamafile live terminal dashboard
 rem ============================================================================
-rem Put this file beside start.bat, then run start.bat first.
+rem Put this file beside the launcher (start_4gb_gpu.bat, start_6gb_gpu.bat, or start_8gb_gpu.bat), then run the launcher first.
 rem
 rem Data cycle:
 rem   collect all data -> render completed dashboard -> wait -> collect again
@@ -19,7 +19,7 @@ rem ============================================================================
 
 rem ============================== CONFIGURATION ===============================
 
-rem Must match HOST and PORT in start.bat.
+rem Must match HOST and PORT in the selected launcher.
 set "HOST=127.0.0.1"
 set "PORT=8080"
 
@@ -98,7 +98,7 @@ set "PS1=%TEMP%\llamafile_status_dashboard_%RANDOM%_%RANDOM%.ps1"
 >>"%PS1%" echo             $RequestsProcessing = Get-Metric $Metrics 'llamacpp:requests_processing'
 >>"%PS1%" echo             $RequestsPending = Get-Metric $Metrics 'llamacpp:requests_deferred'
 >>"%PS1%" echo         } catch {
->>"%PS1%" echo             $Detail = 'Metrics endpoint is unavailable. Verify --metrics in start.bat, then restart the server.'
+>>"%PS1%" echo             $Detail = 'Metrics endpoint is unavailable. Verify --metrics in the launcher, then restart the server.'
 >>"%PS1%" echo         }
 >>"%PS1%" echo     } catch {
 >>"%PS1%" echo         $Detail = 'Server unavailable at ' + $BaseUrl
@@ -184,7 +184,7 @@ set "PS1=%TEMP%\llamafile_status_dashboard_%RANDOM%_%RANDOM%.ps1"
 >>"%PS1%" echo         '  ------------------------------------------------------------------------------'
 >>"%PS1%" echo         ('   KV cache     : [' + (Get-Bar $KvPercent $BarWidth) + '] ' + $KvPercent + '%%  (' + (Show-Value $KvTokens 0) + ' cached tokens)')
 >>"%PS1%" echo         ('   Max context  : ' + $Context + ' tokens')
->>"%PS1%" echo         '   GPU offload  : Exact GPU/CPU layer count appears once in start.bat startup logs.'
+>>"%PS1%" echo         '   GPU offload  : Exact GPU/CPU layer count appears once in the launcher startup logs.'
 >>"%PS1%" echo         ''
 >>"%PS1%" echo         '  =============================================================================='
 >>"%PS1%" echo         ('   Collect -> render -> wait ' + $RefreshSeconds + ' seconds -> repeat. Ctrl+C closes.')

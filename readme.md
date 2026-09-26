@@ -154,9 +154,10 @@ Press `Ctrl+C` in the dashboard window to close it.
 - Starts a local llama.cpp/llamafile server and bundled browser UI at `127.0.0.1:8080`.
 - Binds only to localhost by default, so devices on the same LAN cannot directly connect.
 - Uses a manually configured 4 GB, 6 GB, or 8 GB hardware profile.
-- Uses an explicit configurable context window, defaulting to 64K tokens.
+- Uses an explicit configurable context window, defaulting to 256K tokens.
+- Uses a configurable max-generation window (PREDICT), defaulting to 32K tokens.
 - Uses a single server slot so one request can use the full configured context.
-- Enables Flash Attention and Q8 KV-cache quantization by default.
+- Enables Flash Attention and Q4 KV-cache quantization by default.
 - Enables `--metrics` so `status.bat` can read supported Prometheus metrics.
 - Enables built-in agent tools (`--tools all`) by default so the model can read, write, and edit files, search content, run shell commands, and get the datetime through the web UI.
 - Optionally passes `--no-mmap` for removable-drive compatibility testing.
@@ -192,14 +193,15 @@ All settings below are near the top of each launcher under the `CONFIGURATION` h
 | `MODEL_8GB` | `models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Model path selected when `TIER=8`. |
 | `HOST` | `127.0.0.1` | Local-only bind address. |
 | `PORT` | `8080` | Server and bundled web UI port. |
-| `CTX` | `65536` | Maximum context window, in tokens. |
+| `CTX` | `262144` | Maximum context window, in tokens. |
 | `PARALLEL` | `1` | Server slots. Keep `1` when one conversation needs the entire configured context. |
-| `THREADS_*` | `6 / 8 / 8` | CPU thread count for the chosen profile. |
+| `PREDICT` | `32768` | Maximum tokens the model may generate in one response or tool call. Must not exceed `CTX`. |
+| `THREADS_*` | `8 / 8 / 8` | CPU thread count for the chosen profile. |
 | `GPU_LAYERS_*` | `999 / 999 / 999` | Maximum model layers requested on GPU for each profile. |
 | `BATCH_*` | `128` | Prompt-processing batch size. More can improve prompt ingestion but needs more VRAM. |
 | `UBATCH_*` | `128` | Prompt micro-batch size. Lower it if prompt ingestion causes GPU out-of-memory errors. |
-| `CACHE_K_*` | `q8_0` | KV-cache K precision. |
-| `CACHE_V_*` | `q8_0` | KV-cache V precision. Flash Attention remains enabled for this configuration. |
+| `CACHE_K_*` | `q4_0` | KV-cache K precision. |
+| `CACHE_V_*` | `q4_0` | KV-cache V precision. Flash Attention remains enabled for this configuration. |
 | `USE_NO_MMAP` | `1` | Controls whether `--no-mmap` is passed. |
 | `FLASH_ATTN` | `on` | Flash Attention mode: `on`, `off`, or `auto` where supported. |
 | `JINJA` | `--jinja` | Uses the chat template provided by GGUF metadata. |
@@ -221,10 +223,11 @@ The KV cache grows with context length. Llamafile allocates the configured conte
 | `8192` | 8K | Normal technical work and moderate code | 6,000 words | Usually easy |
 | `16384` | 16K | Longer coding tasks, medium documents, agent prompts | 12,000 words | Usually practical |
 | `32768` | 32K | Large logs, multiple files, RAG chunks | 24,000 words | Model-dependent |
-| `65536` | 64K | Long documents/logs and extended coding/agent work | 48,000 words | Current default; test each exact profile |
+| `65536` | 64K | Long documents/logs and extended coding/agent work | 48,000 words | Practical on 4–8 GB VRAM with q4_0 cache |
 | `98304` | 96K | Specialist long-context tasks | 72,000 words | Usually tight on 4–8 GB VRAM |
 | `131072` | 128K | Very large documents/repositories | 96,000 words | Often impractical without a smaller model or CPU offload |
-| `262144` | 256K | Extreme context; requires explicit model support | 192,000 words | Not a dependable 4–8 GB distribution preset |
+| `196608` | 192K | Fallback when 256K fails; large repositories | 144,000 words | Tight on 4–8 GB VRAM; use q4_0 cache |
+| `262144` | 256K | Long documents/logs and extended coding/agent work | 192,000 words | Current default; Qwen3.5 native maximum; test each exact profile |
 
 Do not set:
 
@@ -232,25 +235,44 @@ Do not set:
 set "CTX=0"
 ```
 
-In llama.cpp-family runtimes, `0` commonly asks the runtime to use context metadata from the model. That might be 128K, 256K, or higher and can cause an immediate allocation failure. Use an explicit value such as:
+In llama.cpp-family runtimes, `0` commonly asks the runtime to use context metadata from the model. That might be 256K or higher and can cause an immediate allocation failure. Use an explicit value such as:
 
 ```bat
-set "CTX=65536"
+set "CTX=262144"
 ```
 
-If your 64K requirement causes out-of-memory errors, try these in order:
+If your 256K requirement causes out-of-memory errors, try these in order:
 
-1. Keep `CTX=65536` and change the affected `CACHE_K_*` and `CACHE_V_*` values from `q8_0` to `q4_0`.
+1. Lower the affected `CTX` value (e.g., to `196608`, then `131072`).
 2. Reduce the affected `BATCH_*` and `UBATCH_*` values from `128` to `64`.
 3. Choose a smaller GGUF/model for that profile.
 4. Reduce `GPU_LAYERS_*` only if CPU offload is acceptable.
+
+The KV-cache type defaults to `q4_0` for all profiles to fit 256K on 4–8 GB VRAM. If you lower `CTX` to 64K or below and have spare VRAM, you can try `q8_0` for better quality on the 8 GB profile.
+
+## Generation settings
+
+`PREDICT` is the maximum number of tokens the model may generate in one response or one tool call (for example, one `write_file` call).
+
+`PREDICT` is not extra context. Generated tokens come out of `CTX`. Setting `PREDICT` equal to `CTX` does not add memory; it only lets a stuck model run for a very long time.
+
+If `PREDICT` is too low, large `write_file` calls get cut off mid-string and the server shows: `Failed to parse tool call arguments as JSON`.
+
+| `PREDICT` | Name | Suitable work |
+|---:|---|---|
+| `4096` | 4K | Short answers and small edits. |
+| `8192` | 8K | Medium files (~600–800 lines of code). |
+| `16384` | 16K | Large files (~1,200–1,500 lines of code). |
+| `32768` | 32K | Very large files. Current default. |
+| `65536` | 64K | Only if one single file truly needs it. Slower if it loops. |
+| `-1` | Unlimited | Until context is full. Not recommended. |
 
 ## Runtime flags
 
 For the default 8 GB profile, the launcher produces the equivalent of this command shape:
 
 ```bat
-llamafile-0.10.5.exe --server -m "MODEL.gguf" --host 127.0.0.1 --port 8080 --jinja -c 65536 -np 1 -ngl 999 -t 8 --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 --batch-size 128 --ubatch-size 128 --metrics --no-mmap
+llamafile-0.10.5.exe --server -m "MODEL.gguf" --host 127.0.0.1 --port 8080 --jinja -c 262144 -n 32768 -np 1 -ngl 999 -t 8 --flash-attn on --cache-type-k q4_0 --cache-type-v q4_0 --batch-size 128 --ubatch-size 128 --metrics --no-mmap --tools all
 ```
 
 Exact values depend on `TIER` and the variables in the selected launcher.
@@ -263,15 +285,17 @@ Exact values depend on `TIER` and the variables in the selected launcher.
 | `--port 8080` | Sets the HTTP server port. |
 | `--jinja` | Applies the model’s GGUF chat template. |
 | `-c N` | Sets explicit context capacity. |
+| `-n N` | Sets the maximum number of tokens the model can generate in one response or tool call (PREDICT). |
 | `-np 1` | Creates one server slot. |
 | `-ngl N` | Requests up to N model layers on GPU. Check startup logs for actual layers offloaded. |
 | `-t N` | Sets CPU inference threads. |
 | `--flash-attn on` | Enables Flash Attention. |
-| `--cache-type-k q8_0` | Uses Q8 KV-cache keys rather than FP16. |
-| `--cache-type-v q8_0` | Uses Q8 KV-cache values rather than FP16. |
+| `--cache-type-k q4_0` | Uses Q4 KV-cache keys rather than FP16. |
+| `--cache-type-v q4_0` | Uses Q4 KV-cache values rather than FP16. |
 | `--batch-size N` | Prompt processing batch size. |
 | `--ubatch-size N` | Prompt processing micro-batch size. |
 | `--metrics` | Enables the Prometheus-style `/metrics` endpoint for the dashboard. |
+| `--tools all` | Enables all built-in agent tools. Override the tool set with `TOOLS`. Ignored when `ENABLE_TOOLS=0`. |
 | `--no-mmap` | Optional legacy llamafile flag that disables model memory-mapping. |
 
 ### USB loading
@@ -382,7 +406,7 @@ No API key is configured by default. Binding to `127.0.0.1` prevents direct LAN 
 | Browser does not open | Wait for model load, then open `http://127.0.0.1:8080/` manually. Check that port 8080 is not already in use. |
 | Model not found | Confirm the exact filename and folder match `MODEL_4GB`, `MODEL_6GB`, or `MODEL_8GB`. |
 | `TIER must be 4, 6, or 8` | Set `TIER` to exactly `4`, `6`, or `8`. |
-| CUDA/GPU out of memory | Keep 64K if required; try Q4 KV cache, lower batch/uBatch, choose a smaller model, or accept lower GPU layers/CPU offload. |
+| CUDA/GPU out of memory | Lower `CTX` (e.g., 196608, then 131072); reduce `BATCH_*`/`UBATCH_*` from 128 to 64; choose a smaller model; or accept lower GPU layers/CPU offload. KV cache already defaults to `q4_0`. |
 | `failed to fit params ... n_gpu_layers already set by user` | Expected if you explicitly pass `-ngl`, such as `999`. Auto-fit did not override your manual offload request. |
 | `munmap failed` warning | Usually harmless when subsequent lines say `model loaded` and `listening on ...`. |
 | Dashboard overlaps/looks garbled | Replace it with the current `status.bat`, which uses ANSI cursor-home plus erase-to-end-of-display. |
