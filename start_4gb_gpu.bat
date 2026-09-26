@@ -113,6 +113,15 @@ rem Set to 1 to expose the Prometheus /metrics endpoint for status.bat.
 rem Requires a server restart after changing this setting.
 set "ENABLE_METRICS=1"
 
+rem Built-in agent tools: read_file, write_file, edit_file, grep_search,
+rem file_glob_search, exec_shell_command, get_datetime.
+rem Set to 1 to enable llamafile's built-in agent tools so the model can edit
+rem files, search code, and run shell commands through the web UI. When enabled,
+rem llamafile restricts CORS to localhost automatically.
+set "ENABLE_TOOLS=1"
+rem Comma-separated tool list, or "all" to enable every available tool.
+set "TOOLS=all"
+
 rem Browser watcher timeout. Browser opens after the local HTTP server responds.
 set "BROWSER_TIMEOUT_MINUTES=30"
 set "HEALTH_PATH=/health"
@@ -193,6 +202,10 @@ rem Set to 1 for USB/removable-drive compatibility; set to 0 for default mmap.
 set "NO_MMAP_FLAG="
 if "%USE_NO_MMAP%"=="1" set "NO_MMAP_FLAG=--no-mmap"
 
+rem Expand the tools flag. Empty when tools are disabled.
+set "TOOLS_FLAG="
+if "%ENABLE_TOOLS%"=="1" set "TOOLS_FLAG=--tools %TOOLS%"
+
 set "BASE_URL=http://%HOST%:%PORT%"
 set "HEALTH_URL=%BASE_URL%%HEALTH_PATH%"
 set "OPEN_URL=%BASE_URL%%OPEN_PATH%"
@@ -215,6 +228,7 @@ echo KV cache K / V    : %CACHE_K% / %CACHE_V%
 echo No memory mapping : %USE_NO_MMAP%
 echo Flash Attention   : %FLASH_ATTN%
 echo Metrics endpoint  : %ENABLE_METRICS%
+echo Agent tools       : %ENABLE_TOOLS% (%TOOLS%)
 echo.
 echo Loading model. The browser opens automatically when the server is ready.
 echo Press Ctrl+C to stop the server.
@@ -241,7 +255,8 @@ rem Every continued line ends in ^ except the final line.
   --batch-size %BATCH% ^
   --ubatch-size %UBATCH% ^
   %METRICS_FLAG% ^
-  %NO_MMAP_FLAG%
+  %NO_MMAP_FLAG% ^
+  %TOOLS_FLAG%
 
 echo.
 echo Server stopped.

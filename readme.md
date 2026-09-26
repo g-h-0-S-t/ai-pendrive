@@ -158,6 +158,7 @@ Press `Ctrl+C` in the dashboard window to close it.
 - Uses a single server slot so one request can use the full configured context.
 - Enables Flash Attention and Q8 KV-cache quantization by default.
 - Enables `--metrics` so `status.bat` can read supported Prometheus metrics.
+- Enables built-in agent tools (`--tools all`) by default so the model can read, write, and edit files, search content, run shell commands, and get the datetime through the web UI.
 - Optionally passes `--no-mmap` for removable-drive compatibility testing.
 - Opens the browser only after the server becomes reachable.
 
@@ -203,6 +204,8 @@ All settings below are near the top of each launcher under the `CONFIGURATION` h
 | `FLASH_ATTN` | `on` | Flash Attention mode: `on`, `off`, or `auto` where supported. |
 | `JINJA` | `--jinja` | Uses the chat template provided by GGUF metadata. |
 | `ENABLE_METRICS` | `1` | Passes `--metrics`, enabling the local `/metrics` endpoint used by `status.bat`. |
+| `ENABLE_TOOLS` | `1` | Passes `--tools all`, enabling llamafile's built-in agent tools (read_file, write_file, edit_file, grep_search, file_glob_search, exec_shell_command, get_datetime) so the model can edit files and search code through the web UI. |
+| `TOOLS` | `all` | Comma-separated tool list, or `all` to enable every available built-in tool. Ignored when `ENABLE_TOOLS=0`. |
 | `BROWSER_TIMEOUT_MINUTES` | `30` | Maximum wait for a healthy server before the browser watcher stops. |
 
 ## Context settings
@@ -298,6 +301,33 @@ set "USE_NO_MMAP=0"
 ```
 
 Do not pass both `--no-mmap` and `--load-mode none`.
+
+## Built-in agent tools
+
+llamafile 0.10.5 bundles built-in agent tools that let the model read, write, and edit files, search content, run shell commands, and get the current time — all from the browser UI at `http://127.0.0.1:8080/`.
+
+The available tools are:
+
+| Tool | Action |
+|---|---|
+| `read_file` | Read a file's contents. |
+| `file_glob_search` | Find files by glob pattern. |
+| `grep_search` | Search file contents with a regex. |
+| `write_file` | Create or overwrite a file. |
+| `edit_file` | Apply a targeted edit to an existing file. |
+| `exec_shell_command` | Run a shell command and return output. |
+| `get_datetime` | Return the current date and time. |
+
+Tools are enabled by default (`ENABLE_TOOLS=1`, `TOOLS=all`). To disable, set `ENABLE_TOOLS=0` or pass `--no-tools` in the launch command. When tools are enabled, llamafile automatically restricts CORS to localhost for security.
+
+> **Security note:** `exec_shell_command` lets the model run arbitrary shell commands on your machine. Only enable tools when you trust the model and are running on a local, isolated machine. Do not expose port 8080 to the network when tools are enabled.
+
+To enable a subset instead of all tools, set `TOOLS` to a comma-separated list:
+
+```bat
+set "ENABLE_TOOLS=1"
+set "TOOLS=read_file,write_file,edit_file,grep_search,get_datetime"
+```
 
 ## Status dashboard
 
