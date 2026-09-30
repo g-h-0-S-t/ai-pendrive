@@ -181,17 +181,20 @@ rem
 rem TOOLS LIST - THIS DOMINATES PROMPT SIZE.
 rem Every tool listed here adds its full schema to the prompt on EVERY
 rem request. Measured cost is roughly 250-300 tokens per tool.
-rem   all                              7 tools, about 2,000 tokens, plus
-rem                                    llamafile's own tool instructions.
-rem                                    This is what pushed the web UI prompt
-rem                                    to about 20,000 tokens and made every
-rem                                    message fail with "request exceeds the
-rem                                    available context size".
-rem   read_file,write_file,edit_file,grep_search
-rem                                    4 core coding tools, about 1,000 tokens.
-rem                                    Recommended default for this profile.
-rem   (empty)                          No tools. Smallest prompt, fastest
-rem                                    prefill. Best for plain chat.
+rem
+rem   all                                                7 tools, about 2,000 tokens, plus
+rem                                                      llamafile's own tool instructions.
+rem                                                      This is what pushed the web UI prompt
+rem                                                      to about 20,000 tokens and made every
+rem                                                      message fail with "request exceeds the
+rem                                                      available context size".
+rem
+rem   read_file,write_file,edit_file,grep_search         4 core coding tools, about 1,000 tokens.
+rem                                                      Recommended default for this profile.
+rem
+rem   (empty)                                            No tools. Smallest prompt, fastest
+rem                                                      prefill. Best for plain chat.
+rem
 rem Enabling file tools lets the model modify anything it can reach, so keep
 rem this list short unless you specifically want agent behavior.
 set "ENABLE_TOOLS=1"
