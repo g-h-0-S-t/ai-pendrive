@@ -1,8 +1,8 @@
 # AI Pendrive
 
-A portable Windows local-LLM package built around [llamafile](https://github.com/mozilla-ai/llamafile). Double-click the launcher for your hardware tier (`start_4gb_gpu.bat`, `start_6gb_gpu.bat`, or `start_8gb_gpu.bat`) to start a local server and browser UI; run `status.bat` in another window for a live terminal dashboard.
+A portable Windows local-LLM package built around [llamafile](https://github.com/mozilla-ai/llamafile). Double-click the launcher for your hardware tier (`start_4gb_gpu.bat`, `start_6gb_gpu.bat`, `start_8gb_gpu.bat`, or `start_no_gpu.bat`) to start a local server and browser UI; run `status.bat` in another window for a live terminal dashboard.
 
-The current implementation is deliberately simple: three tier-specific launchers, paths relative to the project/USB root, and one manually selected hardware profile. It does **not** auto-detect hardware, scan model folders, show a model picker, download anything automatically, or prompt for context size at runtime.
+The current implementation is deliberately simple: four tier-specific launchers, paths relative to the project/USB root, and one manually selected hardware profile. It does **not** auto-detect hardware, scan model folders, show a model picker, download anything automatically, or prompt for context size at runtime.
 
 **AI Pendrive by Cyberbatman**
 
@@ -17,6 +17,7 @@ ai-pendrive/
 ├── start_4gb_gpu.bat
 ├── start_6gb_gpu.bat
 ├── start_8gb_gpu.bat
+├── start_no_gpu.bat
 ├── status.bat
 ├── server/
 │   ├── llamafile-0.10.5.exe
@@ -28,8 +29,11 @@ ai-pendrive/
     ├── 6GB/
     │   ├── Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
     │   └── instructions.txt
-    └── 8GB/
-        ├── Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
+    ├── 8GB/
+    │   ├── Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
+    │   └── instructions.txt
+    └── no_gpu/
+        ├── Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
         └── instructions.txt
 ```
 
@@ -63,6 +67,7 @@ Place the designated Qwen3.5 GGUF files at the exact paths shown below:
 models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf
 models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
 models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
+models\no_gpu\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
 ```
 
 See the tier-specific files for the current manual download workflow:
@@ -71,6 +76,7 @@ See the tier-specific files for the current manual download workflow:
 models\4GB\instructions.txt
 models\6GB\instructions.txt
 models\8GB\instructions.txt
+models\no_gpu\instructions.txt
 ```
 
 The launchers do not download models automatically. Run the appropriate Hugging Face CLI command from the ai-pendrive directory:
@@ -85,6 +91,10 @@ hf download hf://HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/Qwen3.5-4B-U
 
 ```bat
 hf download hf://HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf --local-dir "models\8GB"
+```
+
+```bat
+hf download hf://HauhauCS/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf --local-dir "models\no_gpu"
 ```
 
 If the model repository is gated, install and authenticate the Hugging Face CLI first:
@@ -103,10 +113,11 @@ Each launcher defaults to the tier in its filename:
 | `start_4gb_gpu.bat` | `4` | `models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf` | `999` | Approximately 4 GB VRAM |
 | `start_6gb_gpu.bat` | `6` | `models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | `999` | Approximately 6 GB VRAM |
 | `start_8gb_gpu.bat` | `8` | `models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | `999` | Approximately 8 GB or more VRAM |
+| `start_no_gpu.bat` | *none* | `models\no_gpu\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | `0` | No usable GPU, CPU only |
 
-There is no hardware detection or menu. `TIER` is a fixed distribution/profile choice. The launchers contain all three model paths, but use the path selected by `TIER`; edit `TIER` only when intentionally changing the profile.
+There is no hardware detection or menu. `TIER` is a fixed distribution/profile choice for the three GPU launchers. `start_no_gpu.bat` has no `TIER` and always runs CPU-only. The GPU launchers contain all three model paths, but use the path selected by `TIER`; edit `TIER` only when intentionally changing the profile.
 
-`-ngl 999` means “try to offload all possible layers to the GPU.” It is a request, not a guarantee. The actual GPU/CPU layer split appears once in the selected launcher’s startup log.
+`-ngl 999` means "try to offload all possible layers to the GPU." It is a request, not a guarantee. The actual GPU/CPU layer split appears once in the selected launcher's startup log. The no-GPU launcher uses `-ngl 0`, so no layers are offloaded and the whole model stays in system RAM.
 
 ### Launch and monitor
 
@@ -124,6 +135,10 @@ start_6gb_gpu.bat
 start_8gb_gpu.bat
 ```
 
+```text
+start_no_gpu.bat
+```
+
 The server remains in the visible CMD window. Once the model has loaded and the local health endpoint responds, the default browser opens automatically at:
 
 ```text
@@ -131,6 +146,8 @@ http://127.0.0.1:8080/
 ```
 
 Keep the launcher window open while using the model. Press `Ctrl+C` in that window to stop it.
+
+On the CPU-only profile the model loads into system RAM, so the first prompt can take 10-30 minutes while the context is ingested. Later prompts in the same session are much faster because the context is already cached.
 
 To monitor the running server, double-click:
 
@@ -153,7 +170,7 @@ Press `Ctrl+C` in the dashboard window to close it.
 - Runs an external GGUF through `server\llamafile-0.10.5.exe`.
 - Starts a local llama.cpp/llamafile server and bundled browser UI at `127.0.0.1:8080`.
 - Binds only to localhost by default, so devices on the same LAN cannot directly connect.
-- Uses a manually configured 4 GB, 6 GB, or 8 GB hardware profile.
+- Uses a manually configured 4 GB, 6 GB, 8 GB, or CPU-only hardware profile.
 - Uses an explicit configurable context window, defaulting to 256K tokens.
 - Uses a configurable max-generation window (PREDICT), defaulting to 32K tokens.
 - Uses a single server slot so one request can use the full configured context.
@@ -163,6 +180,16 @@ Press `Ctrl+C` in the dashboard window to close it.
 - Optionally passes `--no-mmap` for removable-drive compatibility testing.
 - Opens the browser only after the server becomes reachable.
 
+## CPU-only profile
+
+`start_no_gpu.bat` runs the same llamafile server and the same bundled web UI as the GPU launchers, with different defaults sized for a 4-core CPU with 8 GB system RAM and no usable GPU backend:
+
+- No GPU offload, so the model stays in system RAM.
+- A smaller context window and a shorter max-generation window, because the KV cache is limited by system RAM rather than VRAM.
+- The Q4 variant of the 2B model rather than the Q8 variant used by the 4 GB GPU profile. Q8 is larger and slower to compute on CPU.
+
+The same model, host, and port apply, so the UI is at `http://127.0.0.1:8080/`.
+
 ## Files
 
 | File | Purpose |
@@ -170,6 +197,7 @@ Press `Ctrl+C` in the dashboard window to close it.
 | `start_4gb_gpu.bat` | 4 GB launcher. Uses `TIER=4` by default, starts llamafile, and opens the browser when the server is ready. |
 | `start_6gb_gpu.bat` | 6 GB launcher. Uses `TIER=6` by default, starts llamafile, and opens the browser when the server is ready. |
 | `start_8gb_gpu.bat` | 8 GB launcher. Uses `TIER=8` by default, starts llamafile, and opens the browser when the server is ready. |
+| `start_no_gpu.bat` | CPU-only launcher. No GPU offload and no `TIER` selector. Tuned for a 4-core CPU with 8 GB system RAM. |
 | `status.bat` | Live terminal dashboard. Polls local server endpoints, Windows CPU/RAM, and NVIDIA GPU data every five seconds. |
 | `server\llamafile-0.10.5.exe` | Llamafile runtime. Download separately; it is not included in Git. |
 | `server\instructions.txt` | Manual llamafile download instructions for the runtime. |
@@ -179,36 +207,39 @@ Press `Ctrl+C` in the dashboard window to close it.
 | `models\4GB\instructions.txt` | Manual model download instructions for the 4 GB profile. |
 | `models\6GB\instructions.txt` | Manual model download instructions for the 6 GB profile. |
 | `models\8GB\instructions.txt` | Manual model download instructions for the 8 GB profile. |
+| `models\no_gpu\instructions.txt` | Manual model download instructions for the CPU-only profile. |
+| `models\no_gpu\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | HauhauCS uncensored Qwen3.5 2B Q4 model for the no-GPU profile. |
 
 ## Configuration
 
-All settings below are near the top of each launcher under the `CONFIGURATION` heading. The three launchers share the same configuration structure and differ by their default `TIER` value.
+All settings below are near the top of each launcher under the `CONFIGURATION` heading. The four launchers share the same configuration structure. The three GPU launchers differ by their default `TIER` value; `start_no_gpu.bat` has no `TIER` and uses a single model path.
 
-| Variable | Default | Description |
-|---|---:|---|
-| `TIER` | `4` / `6` / `8` | Fixed profile to use; each launcher defaults to the tier in its filename. |
-| `LLAMA_RELATIVE_PATH` | `server\llamafile-0.10.5.exe` | Llamafile executable path relative to the selected launcher. |
-| `MODEL_4GB` | `models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf` | Model path selected when `TIER=4`. |
-| `MODEL_6GB` | `models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Model path selected when `TIER=6`. |
-| `MODEL_8GB` | `models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Model path selected when `TIER=8`. |
-| `HOST` | `127.0.0.1` | Local-only bind address. |
-| `PORT` | `8080` | Server and bundled web UI port. |
-| `CTX` | `262144` | Maximum context window, in tokens. |
-| `PARALLEL` | `1` | Server slots. Keep `1` when one conversation needs the entire configured context. |
-| `PREDICT` | `32768` | Maximum tokens the model may generate in one response or tool call. Must not exceed `CTX`. |
-| `THREADS_*` | `8 / 8 / 8` | CPU thread count for the chosen profile. |
-| `GPU_LAYERS_*` | `999 / 999 / 999` | Maximum model layers requested on GPU for each profile. |
-| `BATCH_*` | `128` | Prompt-processing batch size. More can improve prompt ingestion but needs more VRAM. |
-| `UBATCH_*` | `128` | Prompt micro-batch size. Lower it if prompt ingestion causes GPU out-of-memory errors. |
-| `CACHE_K_*` | `q4_0` | KV-cache K precision. |
-| `CACHE_V_*` | `q4_0` | KV-cache V precision. Flash Attention remains enabled for this configuration. |
-| `USE_NO_MMAP` | `1` | Controls whether `--no-mmap` is passed. |
-| `FLASH_ATTN` | `on` | Flash Attention mode: `on`, `off`, or `auto` where supported. |
-| `JINJA` | `--jinja` | Uses the chat template provided by GGUF metadata. |
-| `ENABLE_METRICS` | `1` | Passes `--metrics`, enabling the local `/metrics` endpoint used by `status.bat`. |
-| `ENABLE_TOOLS` | `1` | Passes `--tools all`, enabling llamafile's built-in agent tools (read_file, write_file, edit_file, grep_search, file_glob_search, exec_shell_command, get_datetime) so the model can edit files and search code through the web UI. |
-| `TOOLS` | `all` | Comma-separated tool list, or `all` to enable every available built-in tool. Ignored when `ENABLE_TOOLS=0`. |
-| `BROWSER_TIMEOUT_MINUTES` | `30` | Maximum wait for a healthy server before the browser watcher stops. |
+| Variable | GPU default | CPU-only default | Description |
+|---|---:|---:|---|
+| `TIER` | `4` / `6` / `8` | *none* | Fixed profile for the GPU launchers; each defaults to the tier in its filename. |
+| `LLAMA_RELATIVE_PATH` | `server\llamafile-0.10.5.exe` | `server\llamafile-0.10.5.exe` | Llamafile executable path relative to the selected launcher. |
+| `MODEL_4GB` | `models\4GB\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q8_0.gguf` | — | Model path selected when `TIER=4`. |
+| `MODEL_6GB` | `models\6GB\Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | — | Model path selected when `TIER=6`. |
+| `MODEL_8GB` | `models\8GB\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | — | Model path selected when `TIER=8`. |
+| `MODEL_NOGPU` | — | `models\no_gpu\Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` | Model path used by the CPU-only launcher. |
+| `HOST` | `127.0.0.1` | `127.0.0.1` | Local-only bind address. |
+| `PORT` | `8080` | `8080` | Server and bundled web UI port. |
+| `CTX` | `262144` | `32768` | Maximum context window, in tokens. |
+| `PARALLEL` | `1` | `1` | Server slots. Keep `1` when one conversation needs the entire configured context. |
+| `PREDICT` | `32768` | `2048` | Maximum tokens the model may generate in one response or tool call. Must not exceed `CTX`. |
+| `THREADS_*` | `8 / 8 / 8` | `4` | CPU thread count. Use the physical core count. |
+| `GPU_LAYERS_*` | `999 / 999 / 999` | `0` | Maximum model layers requested on GPU. `0` keeps the model in system RAM. |
+| `BATCH_*` | `128` | `64` | Prompt-processing batch size. |
+| `UBATCH_*` | `128` | `64` | Prompt micro-batch size. |
+| `CACHE_K_*` | `q4_0` | `q4_0` | KV-cache K precision. |
+| `CACHE_V_*` | `q4_0` | `q4_0` | KV-cache V precision. Flash Attention remains enabled for this configuration. |
+| `USE_NO_MMAP` | `1` | `1` | Controls whether `--no-mmap` is passed. |
+| `FLASH_ATTN` | `on` | `on` | Flash Attention mode: `on`, `off`, or `auto` where supported. |
+| `JINJA` | `--jinja` | `--jinja` | Uses the chat template provided by GGUF metadata. |
+| `ENABLE_METRICS` | `1` | `1` | Passes `--metrics`, enabling the local `/metrics` endpoint used by `status.bat`. |
+| `ENABLE_TOOLS` | `1` | `1` | Passes `--tools`, enabling llamafile's built-in agent tools. |
+| `TOOLS` | `all` | `all` | Comma-separated tool list, or `all` to enable every available built-in tool. Ignored when `ENABLE_TOOLS=0`. |
+| `BROWSER_TIMEOUT_MINUTES` | `30` | `30` | Maximum wait for a healthy server before the browser watcher stops. |
 
 ## Context settings
 
@@ -353,6 +384,8 @@ set "ENABLE_TOOLS=1"
 set "TOOLS=read_file,write_file,edit_file,grep_search,get_datetime"
 ```
 
+Every tool adds its full schema to the prompt on every request, roughly 250-300 tokens each. This matters most on the CPU-only profile, where the bundled web UI's own system prompt is already large enough to sit close to the context limit on its own. If context errors appear there, raise `CTX` first; shortening `TOOLS` is a secondary lever.
+
 ## Status dashboard
 
 `status.bat` reads local data every five seconds and displays:
@@ -404,13 +437,15 @@ No API key is configured by default. Binding to `127.0.0.1` prevents direct LAN 
 | Dashboard says metrics are unavailable | Confirm `ENABLE_METRICS=1`; ensure `--metrics` is inside the final continued llamafile command; stop and restart the server. |
 | `--metrics` is shown in the launcher but unavailable | Verify the previous command line ends with `^`; otherwise CMD ends the launch command before `--metrics`. |
 | Browser does not open | Wait for model load, then open `http://127.0.0.1:8080/` manually. Check that port 8080 is not already in use. |
-| Model not found | Confirm the exact filename and folder match `MODEL_4GB`, `MODEL_6GB`, or `MODEL_8GB`. |
+| Model not found | Confirm the exact filename and folder match `MODEL_4GB`, `MODEL_6GB`, `MODEL_8GB`, or `MODEL_NOGPU`. |
 | `TIER must be 4, 6, or 8` | Set `TIER` to exactly `4`, `6`, or `8`. |
 | CUDA/GPU out of memory | Lower `CTX` (e.g., 196608, then 131072); reduce `BATCH_*`/`UBATCH_*` from 128 to 64; choose a smaller model; or accept lower GPU layers/CPU offload. KV cache already defaults to `q4_0`. |
+| System out of memory on the CPU-only profile | Lower `CTX`, or shorten the `TOOLS` list. Every enabled tool adds to the prompt on every request. |
+| `request (N tokens) exceeds the available context size` | Raise `CTX`. The bundled web UI sends a large system prompt on every request, so a small `CTX` can overflow even for a one-word message. Trimming `TOOLS` alone will not fix this. |
 | `failed to fit params ... n_gpu_layers already set by user` | Expected if you explicitly pass `-ngl`, such as `999`. Auto-fit did not override your manual offload request. |
 | `munmap failed` warning | Usually harmless when subsequent lines say `model loaded` and `listening on ...`. |
 | Dashboard overlaps/looks garbled | Replace it with the current `status.bat`, which uses ANSI cursor-home plus erase-to-end-of-display. |
-| `NVIDIA GPU unavailable` in the dashboard | Install/update NVIDIA drivers and ensure `nvidia-smi` works in Command Prompt. |
+| `NVIDIA GPU unavailable` in the dashboard | Install/update NVIDIA drivers and ensure `nvidia-smi` works in Command Prompt. Expected on CPU-only machines. |
 
 ## Distribution notes
 
