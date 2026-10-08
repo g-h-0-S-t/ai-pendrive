@@ -6,6 +6,7 @@ llama-server
 # Model weight files (large binaries, not in version control)
 models/**/*.gguf
 models/**/*.safetensors
+models/**/*.gguf.*
 
 # OS artifacts
 Thumbs.db
