@@ -101,7 +101,12 @@ function Load-Config {
 }
 
 function Save-Config($cfg) {
-    $cfg | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $CONFIG -Encoding UTF8
+    $json = $cfg | ConvertTo-Json -Depth 5
+    $dir = Split-Path -Parent $CONFIG
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    [System.IO.File]::WriteAllText($CONFIG, $json, (New-Object System.Text.UTF8Encoding($false)))
     Write-Ok 'config.json updated.'
 }
 
@@ -109,7 +114,10 @@ function Save-Config($cfg) {
 # Model index
 # ============================================================================
 function Refresh-ModelIndex {
-    if (-not (Test-Path -LiteralPath $MODELS)) { return @() }
+    if (-not (Test-Path -LiteralPath $MODELS)) {
+        New-Item -ItemType Directory -Path $MODELS -Force | Out-Null
+    }
+
     $index = @()
     Get-ChildItem -LiteralPath $MODELS -Recurse -Filter '*.gguf' -ErrorAction SilentlyContinue | ForEach-Object {
         $rel = $_.FullName.Substring($Root.Length).TrimStart('\')
@@ -121,13 +129,36 @@ function Refresh-ModelIndex {
             modifiedAt = $_.LastWriteTime.ToString('s')
         }
     }
-    ($index | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $INDEX -Encoding UTF8
+
+    $json = if ($index.Count -gt 0) { $index | ConvertTo-Json -Depth 4 } else { '[]' }
+
+    try {
+        $indexDir = Split-Path -Parent $INDEX
+        if ($indexDir -and -not (Test-Path -LiteralPath $indexDir)) {
+            New-Item -ItemType Directory -Path $indexDir -Force | Out-Null
+        }
+        [System.IO.File]::WriteAllText($INDEX, $json, (New-Object System.Text.UTF8Encoding($false)))
+    } catch {
+        Write-Warn ('Could not write model index: ' + $_.Exception.Message)
+    }
+
     return $index
 }
 
 function Get-Models {
     if (Test-Path -LiteralPath $INDEX) {
-        try { return (Get-Content -LiteralPath $INDEX -Raw | ConvertFrom-Json) } catch {}
+        try {
+            $raw = Get-Content -LiteralPath $INDEX -Raw
+            if (-not [string]::IsNullOrWhiteSpace($raw)) {
+                $parsed = $raw | ConvertFrom-Json
+                # ConvertFrom-Json returns $null for '[]' on some PS versions
+                if ($null -eq $parsed) { return @() }
+                # A single-entry index comes back as one object, not an array;
+                # force it into an array so callers can use .Count / index safely.
+                if ($parsed -isnot [System.Array]) { return @($parsed) }
+                return $parsed
+            }
+        } catch {}
     }
     return Refresh-ModelIndex
 }
@@ -254,15 +285,15 @@ function Show-ConfigSummary {
 
 function Menu-Models {
     param($cfg)
-    Refresh-ModelIndex | Out-Null
     $models = Get-Models
-    if (-not $models -or $models.Count -eq 0) {
+    if (-not $models -or @($models).Count -eq 0) {
         Write-Warn 'No .gguf models found in models\.'
         Write-Info 'Use the "Add model" option to download one.'
         Read-Host '   Press Enter' | Out-Null
         return $cfg
     }
 
+    $models = @($models)
     $options = @()
     $defaultIdx = 0
     for ($i = 0; $i -lt $models.Count; $i++) {
@@ -311,7 +342,7 @@ function Menu-AddModel {
             [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
         )
         if ($token -and (Read-Host '   Save token to .hf_token? [Y/n]') -notmatch '^(n|no)$') {
-            Set-Content -LiteralPath $tokenFile -Value $token -NoNewline -Encoding ASCII
+            [System.IO.File]::WriteAllText($tokenFile, $token, (New-Object System.Text.UTF8Encoding($false)))
         }
     }
 

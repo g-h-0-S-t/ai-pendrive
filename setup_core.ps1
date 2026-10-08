@@ -250,8 +250,6 @@ function Get-TierLabel {
 # ============================================================================
 # Path normalization helper
 # ============================================================================
-# Returns a path relative to $Root with forward-slash-free separators, or the
-# input unchanged if it is not under $Root.
 function Get-RelativePath {
     param(
         [string]$FullPath,
@@ -282,8 +280,6 @@ function Ensure-Llamafile {
 
     if (Test-Path -LiteralPath $exe) {
         Write-Ok ('Llamafile runtime present: {0}' -f $exe)
-        # Return ONLY the path string. Anything else emitted would leak into
-        # the caller's assignment.
         return [string]$exe
     }
 
@@ -331,8 +327,6 @@ function Ensure-Llamafile {
     Write-Info 'Downloading llamafile 0.10.5 from GitHub...'
     Write-Host ''
 
-    # $null = ... swallows download_model.ps1's return object so it cannot
-    # leak into this function's output stream.
     try {
         $null = & $DOWNLOAD -Url $url -DestDir $serverDir -ShowProgress:$true
     } catch {
@@ -343,8 +337,6 @@ function Ensure-Llamafile {
         return $null
     }
 
-    # download_model.ps1 saves the file under $serverDir using the URL's
-    # basename ("llamafile-0.10.5"). Rename to the .exe name we expect.
     $downloaded = Join-Path $serverDir 'llamafile-0.10.5'
     if ((Test-Path -LiteralPath $downloaded) -and -not (Test-Path -LiteralPath $exe)) {
         Move-Item -LiteralPath $downloaded -Destination $exe -Force
@@ -400,8 +392,6 @@ function Get-ModelByKey([string]$Key) {
     return $null
 }
 
-# Returns the FULL local path to the model file, or $null on failure.
-# Never returns anything else, so callers can safely do .Substring / Split-Path.
 function Ensure-Model {
     param(
         [string]$Key,
@@ -442,7 +432,6 @@ function Ensure-Model {
     Write-Host '   (The download can take several minutes depending on your connection.)' -ForegroundColor DarkGray
     Write-Host ''
 
-    # $null = ... swallows download_model.ps1's return object.
     try {
         $null = & $DOWNLOAD -Repo $model.Repo -File $model.File `
             -DestDir $destDir -Token $Token -ShowProgress:$true
@@ -493,7 +482,7 @@ function Get-HfToken {
     if ([string]::IsNullOrWhiteSpace($plain)) { return '' }
 
     if (Read-YesNo 'Save this token to .hf_token for future runs?' $true) {
-        Set-Content -LiteralPath $tokenFile -Value $plain -NoNewline -Encoding ASCII
+        [System.IO.File]::WriteAllText($tokenFile, $plain, (New-Object System.Text.UTF8Encoding($false)))
         Write-Ok 'Token saved to .hf_token.'
     }
     return [string]$plain
@@ -549,7 +538,12 @@ function Write-Config {
         llamafilePath     = 'server\llamafile-0.10.5.exe'
     }
 
-    $cfg | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $CONFIG -Encoding UTF8
+    $json = $cfg | ConvertTo-Json -Depth 5
+    $dir = Split-Path -Parent $CONFIG
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    [System.IO.File]::WriteAllText($CONFIG, $json, (New-Object System.Text.UTF8Encoding($false)))
     Write-Ok ('Wrote configuration to: ' + $CONFIG)
 }
 
@@ -558,7 +552,10 @@ function Write-Config {
 # ============================================================================
 function Update-ModelIndex {
     $modelsDir = Join-Path $Root 'models'
-    if (-not (Test-Path -LiteralPath $modelsDir)) { return }
+    if (-not (Test-Path -LiteralPath $modelsDir)) {
+        New-Item -ItemType Directory -Path $modelsDir -Force | Out-Null
+    }
+
     $index = @()
     Get-ChildItem -LiteralPath $modelsDir -Recurse -Filter '*.gguf' -ErrorAction SilentlyContinue | ForEach-Object {
         $rel = Get-RelativePath -FullPath $_.FullName -BasePath $Root
@@ -570,8 +567,10 @@ function Update-ModelIndex {
             modifiedAt = $_.LastWriteTime.ToString('s')
         }
     }
+
     $indexPath = Join-Path $modelsDir '.model_index.json'
-    ($index | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $indexPath -Encoding UTF8
+    $json = if ($index.Count -gt 0) { $index | ConvertTo-Json -Depth 4 } else { '[]' }
+    [System.IO.File]::WriteAllText($indexPath, $json, (New-Object System.Text.UTF8Encoding($false)))
     Write-Ok ('Model index updated ({0} model(s)).' -f $index.Count)
 }
 
@@ -581,7 +580,6 @@ function Update-ModelIndex {
 function Invoke-AutoMode {
     Write-AutoHeader
 
-    # ---- 1/4 detect hardware -------------------------------------------------
     Write-Step -Number 1 -Total 4 -Text 'Detecting your hardware'
     $detection = Invoke-Detection -Quiet
     $rec       = $detection.Recommendation
@@ -594,10 +592,8 @@ function Invoke-AutoMode {
     Write-Info ('Chosen profile: {0}' -f $tierLabel)
     Write-Info ('Reason: {0}' -f $rec.Reason)
 
-    # ---- HF token (silent if present) ---------------------------------------
     $token = Get-HfToken -Auto
 
-    # ---- 2/4 llamafile runtime ----------------------------------------------
     Write-Step -Number 2 -Total 4 -Text 'Ensuring llamafile runtime'
     $exe = Ensure-Llamafile -Auto
     if (-not $exe) {
@@ -605,12 +601,9 @@ function Invoke-AutoMode {
         return 1
     }
 
-    # ---- 3/4 model -----------------------------------------------------------
     Write-Step -Number 3 -Total 4 -Text 'Downloading the model for your hardware'
     $modelPath = Ensure-Model -Key $tierKey -Token $token -Auto
 
-    # Defensive: Ensure-Model should return a string, but if something ever
-    # leaks again, pick the last element and coerce it.
     if ($modelPath -is [array]) {
         $modelPath = $modelPath[-1]
     }
@@ -619,7 +612,6 @@ function Invoke-AutoMode {
         return 1
     }
 
-    # ---- 4/4 config.json -----------------------------------------------------
     Write-Step -Number 4 -Total 4 -Text 'Writing configuration'
     $modelRel = Get-RelativePath -FullPath $modelPath -BasePath $Root
 
@@ -668,11 +660,9 @@ function Invoke-SemiAutoMode {
     $rec = $Detection.Recommendation
     $recommendedKey = Normalize-TierKey $rec.Tier
 
-    # ----- Token -------------------------------------------------------------
     Write-Section 'Step 1/7 - Hugging Face access token (optional)'
     $token = Get-HfToken
 
-    # ----- Model -------------------------------------------------------------
     Write-Section 'Step 2/7 - Model selection'
     $defaultIndex = 0
     for ($i = 0; $i -lt $ModelCatalog.Count; $i++) {
@@ -697,7 +687,6 @@ function Invoke-SemiAutoMode {
         $url = Read-Text 'URL or hf:// URI'
         $customTier = Read-Text 'Save into which tier folder?' 'custom'
         try {
-            # $null = ... swallows the downloader's return object.
             $null = & $DOWNLOAD -Url $url -Tier $customTier -Token $token -ShowProgress:$true
             $modelRel = 'models\' + $customTier + '\' + [System.IO.Path]::GetFileName(($url -split '\?')[0])
             $tierForCfg = $customTier
@@ -717,14 +706,12 @@ function Invoke-SemiAutoMode {
         $modelRel = Get-RelativePath -FullPath $modelPath -BasePath $Root
     }
 
-    # ----- Runtime -----------------------------------------------------------
     Write-Section 'Step 3/7 - Llamafile runtime'
     $exe = Ensure-Llamafile
     if (-not $exe) {
         Write-Warn 'Runtime not installed. The launcher will not work until it is in server\.'
     }
 
-    # ----- Tier/profile ------------------------------------------------------
     Write-Section 'Step 4/7 - Hardware profile'
     $tierOptions = @('4 GB GPU', '6 GB GPU', '8 GB GPU or more', 'CPU only (no GPU)')
     $recIdx = 3
@@ -751,7 +738,6 @@ function Invoke-SemiAutoMode {
         }
     }
 
-    # ----- Context / generation ---------------------------------------------
     Write-Section 'Step 5/7 - Context and generation'
     Write-Host '   Context sizes: 2K, 4K, 8K, 16K, 32K, 64K, 128K, 192K, 256K' -ForegroundColor DarkGray
     Write-Host ('   Recommended for your machine: {0}' -f $ctxDefault) -ForegroundColor DarkGray
@@ -759,12 +745,10 @@ function Invoke-SemiAutoMode {
     $predict = Read-Int 'Max tokens per reply' $predictDefault
     if ($predict -gt $ctx) { $predict = $ctx; Write-Warn ('PREDICT clamped to CTX=' + $ctx) }
 
-    # ----- Port --------------------------------------------------------------
     Write-Section 'Step 6/7 - Server settings'
     $port = Read-Int 'HTTP port' 8080
     $parallel = Read-Int 'Parallel server slots' 1
 
-    # ----- Tools -------------------------------------------------------------
     Write-Section 'Step 7/7 - Optional features'
     $enableTools = Read-YesNo 'Enable built-in agent tools (file read/write, shell, grep)?' $true
     $tools = 'all'
