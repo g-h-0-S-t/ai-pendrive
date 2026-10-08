@@ -5,21 +5,21 @@ set "SELF_DIR=%~dp0"
 rem ============================================================================
 rem status.bat - Llamafile live terminal dashboard
 rem ============================================================================
-rem Put this file beside the launcher (start_4gb_gpu.bat, start_6gb_gpu.bat, or start_8gb_gpu.bat), then run the launcher first.
+rem Put this file beside launcher.bat. Run launcher.bat first.
 rem
-rem Data cycle:
-rem   collect all data -> render completed dashboard -> wait -> collect again
+rem Reads HOST and PORT from config.json if present; otherwise defaults to
+rem 127.0.0.1:8080.
 rem
-rem The render uses ANSI cursor-home plus erase-to-end-of-screen. Therefore it
-rem does not use CLS during normal refreshes, does not leave old text behind,
-rem and does not blank the display during the five-second wait.
+rem Data cycle: collect -> render -> wait -> repeat.
+rem Uses ANSI cursor-home + erase-to-end-of-screen, so it does not blank the
+rem display during the wait and does not leave stale text behind.
 rem
 rem Press Ctrl+C inside the dashboard to close it.
 rem ============================================================================
 
 rem ============================== CONFIGURATION ===============================
 
-rem Must match HOST and PORT in the selected launcher.
+rem Fallback host/port. Overridden by config.json when available.
 set "HOST=127.0.0.1"
 set "PORT=8080"
 
@@ -30,6 +30,14 @@ rem Number of characters in CPU, RAM, GPU, VRAM, and KV-cache bars.
 set "BAR_WIDTH=36"
 
 rem ============================ END CONFIGURATION =============================
+
+rem Read host/port from config.json (written by setup.bat) if it exists.
+set "CONFIG=%SELF_DIR%config.json"
+if exist "%CONFIG%" (
+    for /f "usebackq delims=" %%A in (`powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "try { $c = Get-Content -Raw '%CONFIG%' | ConvertFrom-Json; if ($c.host) { Write-Output ('HOST=' + $c.host) }; if ($c.port) { Write-Output ('PORT=' + $c.port) } } catch {}"`) do (
+        set "%%A"
+    )
+)
 
 rem A temporary PS1 avoids fragile CMD parsing of a large inline PowerShell script.
 set "PS1=%TEMP%\llamafile_status_dashboard_%RANDOM%_%RANDOM%.ps1"
@@ -98,7 +106,7 @@ set "PS1=%TEMP%\llamafile_status_dashboard_%RANDOM%_%RANDOM%.ps1"
 >>"%PS1%" echo             $RequestsProcessing = Get-Metric $Metrics 'llamacpp:requests_processing'
 >>"%PS1%" echo             $RequestsPending = Get-Metric $Metrics 'llamacpp:requests_deferred'
 >>"%PS1%" echo         } catch {
->>"%PS1%" echo             $Detail = 'Metrics endpoint is unavailable. Verify --metrics in the launcher, then restart the server.'
+>>"%PS1%" echo             $Detail = 'Metrics endpoint is unavailable. Verify enableMetrics in config.json, then restart the server.'
 >>"%PS1%" echo         }
 >>"%PS1%" echo     } catch {
 >>"%PS1%" echo         $Detail = 'Server unavailable at ' + $BaseUrl
@@ -148,8 +156,6 @@ set "PS1=%TEMP%\llamafile_status_dashboard_%RANDOM%_%RANDOM%.ps1"
 >>"%PS1%" echo     }
 >>"%PS1%" echo.
 >>"%PS1%" echo     # ----------------------------- RENDER -------------------------------
->>"%PS1%" echo     # All data exists before this point. Home + J erases the old frame only
->>"%PS1%" echo     # at the instant the new complete frame is rendered.
 >>"%PS1%" echo     $Now = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 >>"%PS1%" echo     $Lines = @(
 >>"%PS1%" echo         ''
@@ -198,7 +204,6 @@ set "PS1=%TEMP%\llamafile_status_dashboard_%RANDOM%_%RANDOM%.ps1"
 >>"%PS1%" echo         Clear-Host
 >>"%PS1%" echo         $FirstRender = $false
 >>"%PS1%" echo     } else {
->>"%PS1%" echo         # ESC[H = cursor home. ESC[J = erase from home to end of display.
 >>"%PS1%" echo         Write-Host ($Esc + '[H' + $Esc + '[J') -NoNewline
 >>"%PS1%" echo     }
 >>"%PS1%" echo.
